@@ -1,0 +1,168 @@
+"""
+FAQ 数据加载器 — 从 JSON/Markdown 加载 FAQ 条目
+"""
+import json
+import logging
+from pathlib import Path
+from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+
+def load_faq_from_json(file_path: str) -> list[dict]:
+    """
+    从 JSON 文件加载 FAQ 数据
+
+    期望格式:
+    [
+        {
+            "faq_id": "faq_001",
+            "question": "如何退货？",
+            "answer": "您可以在订单页面...",
+            "category": "order",
+            "tags": ["退货", "退款"],
+            "priority": 10
+        },
+        ...
+    ]
+
+    Args:
+        file_path: JSON 文件路径
+
+    Returns:
+        FAQ 条目列表
+    """
+    path = Path(file_path)
+    if not path.exists():
+        logger.error(f"FAQ 文件不存在: {file_path}")
+        return []
+
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if isinstance(data, dict):
+        # 支持 {"faqs": [...]} 格式
+        data = data.get("faqs", data.get("entries", []))
+
+    logger.info(f"从 {file_path} 加载了 {len(data)} 条 FAQ")
+    return data
+
+
+def load_default_faqs() -> list[dict]:
+    """
+    加载内置的默认 FAQ 数据
+
+    当没有外部 FAQ 文件时使用，保证系统可运行。
+    """
+    return [
+        # --- 订单类 ---
+        {
+            "faq_id": "faq_order_001",
+            "question": "如何查询我的订单状态？",
+            "answer": "您可以在'我的订单'页面查看所有订单的状态。如果订单已发货，您还将看到物流追踪号。也可以联系客服提供订单号查询。",
+            "category": "order",
+            "tags": ["订单", "查询", "状态"],
+            "priority": 10,
+        },
+        {
+            "faq_id": "faq_order_002",
+            "question": "如何取消订单？",
+            "answer": "在订单尚未发货前，您可以在'我的订单'页面点击'取消订单'按钮。如已发货，请先拒收包裹，再联系客服协助取消和退款。",
+            "category": "order",
+            "tags": ["订单", "取消"],
+            "priority": 9,
+        },
+        {
+            "faq_id": "faq_order_003",
+            "question": "发货时间要多久？",
+            "answer": "一般情况下，现货商品会在下单后24小时内发货。定制商品需要3-5个工作日。发货后，国内快递通常1-3天送达，偏远地区3-7天。",
+            "category": "order",
+            "tags": ["发货", "物流", "时间"],
+            "priority": 8,
+        },
+        # --- 退款类 ---
+        {
+            "faq_id": "faq_refund_001",
+            "question": "如何申请退款？",
+            "answer": "在'我的订单'页面找到对应订单，点击'申请退款'，填写退款原因并提交。我们会在1-3个工作日内审核。审核通过后，退款将在3-7个工作日退回原支付方式。",
+            "category": "billing",
+            "tags": ["退款", "申请"],
+            "priority": 10,
+        },
+        {
+            "faq_id": "faq_refund_002",
+            "question": "退款多久到账？",
+            "answer": "审核通过后：支付宝/微信支付 1-3 个工作日到账；银行卡 3-7 个工作日到账；信用卡 7-15 个工作日到账。具体以银行处理时间为准。",
+            "category": "billing",
+            "tags": ["退款", "到账", "时间"],
+            "priority": 8,
+        },
+        # --- 产品类 ---
+        {
+            "faq_id": "faq_product_001",
+            "question": "产品有保修吗？",
+            "answer": "所有产品均享有1年免费保修服务。在保修期内，非人为损坏的质量问题可免费维修或更换。您需要保留购买凭证作为保修依据。",
+            "category": "product",
+            "tags": ["保修", "售后"],
+            "priority": 8,
+        },
+        {
+            "faq_id": "faq_product_002",
+            "question": "如何判断产品是否兼容？",
+            "answer": "您可以在产品详情页查看兼容性列表。如有疑问，建议提供您的设备型号，客服人员会帮您确认兼容性。支持的产品在包装上也有明确标注。",
+            "category": "product",
+            "tags": ["兼容性", "适配"],
+            "priority": 7,
+        },
+        # --- 账户类 ---
+        {
+            "faq_id": "faq_account_001",
+            "question": "忘记密码怎么办？",
+            "answer": "在登录页面点击'忘记密码'，输入注册邮箱，我们会发送密码重置链接。如果收不到邮件，请检查垃圾箱，或联系客服协助重置。",
+            "category": "account",
+            "tags": ["密码", "账户", "登录"],
+            "priority": 10,
+        },
+        {
+            "faq_id": "faq_account_002",
+            "question": "如何修改绑定手机号？",
+            "answer": "登录后进入'账户设置' → '安全设置'，点击手机号旁边的'修改'按钮。需要先验证当前手机号，再绑定新手机号。如原手机号已停用，请联系客服人工修改。",
+            "category": "account",
+            "tags": ["手机号", "账户", "修改"],
+            "priority": 7,
+        },
+        # --- 技术类 ---
+        {
+            "faq_id": "faq_tech_001",
+            "question": "App 无法打开/闪退怎么办？",
+            "answer": "请尝试以下排查步骤：1. 确保 App 已更新到最新版本；2. 重启手机；3. 清除 App 缓存（设置→应用→清除缓存）；4. 卸载后重新安装。如仍存在问题，请提供手机型号和系统版本。",
+            "category": "technical",
+            "tags": ["App", "闪退", "崩溃"],
+            "priority": 9,
+        },
+        {
+            "faq_id": "faq_tech_002",
+            "question": "设备无法开机怎么办？",
+            "answer": "请先尝试：1. 长按电源键 10 秒以上强制重启；2. 连接充电器确保不是没电；3. 检查充电线缆和适配器是否正常。如果指示灯不亮或无任何反应，可能是硬件故障，请联系售后维修。",
+            "category": "technical",
+            "tags": ["设备", "开机", "故障"],
+            "priority": 9,
+        },
+        # --- 通用类 ---
+        {
+            "faq_id": "faq_general_001",
+            "question": "客服工作时间是什么？",
+            "answer": "在线客服工作时间：周一至周日 9:00-21:00。人工客服工作时间：周一至周五 9:00-18:00。非工作时间可以留言，我们会在下一个工作日回复。",
+            "category": "general",
+            "tags": ["客服", "时间", "工作时间"],
+            "priority": 6,
+        },
+        {
+            "faq_id": "faq_general_002",
+            "question": "如何联系人工客服？",
+            "answer": "您可以通过以下方式联系人工客服：1. 在对话中选择'转人工'；2. 拨打客服热线 400-XXX-XXXX；3. 发送邮件至 support@example.com。建议优先使用在线客服，响应最快。",
+            "category": "general",
+            "tags": ["人工", "联系", "客服"],
+            "priority": 8,
+        },
+    ]
