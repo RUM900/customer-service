@@ -114,6 +114,16 @@ class SupervisorDecision(BaseModel):
         description="补偿方案（退款/优惠券/积分等）"
     )
 
+    # HITL: 需要人工审核的高风险决策
+    require_human_review: bool = Field(
+        default=False,
+        description="是否需要人工审核（大额退款/账户删除/法律风险等）"
+    )
+    review_items: list[str] = Field(
+        default_factory=list,
+        description="需要审核的具体项目，如['退款500元', '补偿300元优惠券']"
+    )
+
     # 是否需要人工
     handoff_required: bool = Field(
         default=False,

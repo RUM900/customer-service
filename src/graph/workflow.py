@@ -458,6 +458,32 @@ async def supervisor_node(state: dict) -> dict:
             history=history,
         )
 
+        # HITL: 高风险决策先挂起，等人工审核
+        if decision.require_human_review:
+            from langgraph.types import interrupt
+            from src.api.review_store import add_review
+            review_context = {
+                "session_id": state.get("session_id", ""),
+                "decision": decision.model_dump(),
+                "specialist_agent": specialist_agent,
+                "escalation_reason": escalation_reason,
+                "message": f"人工审核请求: {decision.reasoning}",
+                "review_items": decision.review_items,
+            }
+            # 加入审核队列
+            thread_id = state.get("session_id", "unknown")
+            add_review(thread_id, review_context)
+            # 挂起执行
+            human_decision = interrupt(review_context)
+            # 人工审核返回后继续: {"approved": true/false, "note": "..."}
+            if human_decision and not human_decision.get("approved", True):
+                decision.action = "reject"
+                decision.reasoning = f"[人工驳回] {human_decision.get('note', '')}"
+                decision.reply_to_customer = (
+                    f"您的请求已提交人工审核。审核意见：{human_decision.get('note', '需进一步核实')}。"
+                    f"我们将在24小时内与您联系。"
+                )
+
         result = {
             "supervisor_decision": decision.model_dump(),
             "active_agent": "supervisor",
