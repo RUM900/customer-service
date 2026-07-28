@@ -1,0 +1,7 @@
+.claude/
+.env
+__pycache__/
+*.pyc
+data/chroma/
+.pytest_cache/
+*.egg-info/
