@@ -129,14 +129,3 @@ class DashScopeProvider(LLMProvider):
     # ----------------------------------------------------------
     # Helpers
     # ----------------------------------------------------------
-
-    @staticmethod
-    def _inject_format_guide(messages: list[dict], schema: dict) -> None:
-        """[已废弃] 请使用 src.llm.base.inject_format_guide"""
-        inject_format_guide(messages, schema)
-
-        # 如果没有系统消息，插入一条
-        messages.insert(0, {
-            "role": "system",
-            "content": f"你必须只返回纯 JSON，格式如下：\n{format_text}\n只返回 JSON，不要解释。",
-        })

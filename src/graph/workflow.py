@@ -17,6 +17,7 @@ Graph 结构:
 - 所有节点纯函数（输入 state，输出 state 更新）
 """
 import logging
+import re
 from typing import Optional, AsyncGenerator
 
 from langgraph.graph import StateGraph, START, END
@@ -26,7 +27,7 @@ from src.models.conversation import (
     Message, MessageRole, ConversationStatus, Tier,
     Resolution, ResolutionType, AgentError,
 )
-from src.models.routing import IntentType, Sentiment, Urgency
+from src.models.routing import Urgency, RoutingDecision
 from src.agents.triage import TriageAgent
 from src.agents.technical import TechnicalAgent
 from src.agents.billing import BillingAgent
@@ -37,8 +38,6 @@ from src.graph.routing import (
     route_after_triage,
     route_after_specialist,
     route_after_supervisor,
-    route_after_faq,
-    route_after_handoff,
     route_after_tools,
 )
 from src.utils.context import prepare_context
@@ -51,54 +50,27 @@ logger = logging.getLogger(__name__)
 # Agent 单例（懒加载）
 # ============================================================
 
-_triage: Optional[TriageAgent] = None
-_technical: Optional[TechnicalAgent] = None
-_billing: Optional[BillingAgent] = None
-_product: Optional[ProductAgent] = None
-_complaint: Optional[ComplaintAgent] = None
-_supervisor: Optional[SupervisorAgent] = None
+_agents: dict[str, object] = {}
 
 
-def _get_triage() -> TriageAgent:
-    global _triage
-    if _triage is None:
-        _triage = TriageAgent()
-    return _triage
-
-
-def _get_technical() -> TechnicalAgent:
-    global _technical
-    if _technical is None:
-        _technical = TechnicalAgent()
-    return _technical
-
-
-def _get_billing() -> BillingAgent:
-    global _billing
-    if _billing is None:
-        _billing = BillingAgent()
-    return _billing
-
-
-def _get_product() -> ProductAgent:
-    global _product
-    if _product is None:
-        _product = ProductAgent()
-    return _product
-
-
-def _get_complaint() -> ComplaintAgent:
-    global _complaint
-    if _complaint is None:
-        _complaint = ComplaintAgent()
-    return _complaint
-
-
-def _get_supervisor() -> SupervisorAgent:
-    global _supervisor
-    if _supervisor is None:
-        _supervisor = SupervisorAgent()
-    return _supervisor
+def _get_agent(name: str):
+    """懒加载 Agent 单例"""
+    if name not in _agents:
+        if name == "triage":
+            _agents[name] = TriageAgent()
+        elif name == "technical":
+            _agents[name] = TechnicalAgent()
+        elif name == "billing":
+            _agents[name] = BillingAgent()
+        elif name == "product":
+            _agents[name] = ProductAgent()
+        elif name == "complaint":
+            _agents[name] = ComplaintAgent()
+        elif name == "supervisor":
+            _agents[name] = SupervisorAgent()
+        else:
+            raise ValueError(f"未知 Agent: {name}")
+    return _agents[name]
 
 
 # ============================================================
@@ -116,7 +88,7 @@ async def triage_node(state: dict) -> dict:
     logger.info(f"[Triage] 分析消息: '{user_message[:80]}...'")
 
     try:
-        agent = _get_triage()
+        agent = _get_agent("triage")
 
         # Context 窗口管理: 智能截断历史消息
         raw_history = state.get("messages", [])
@@ -166,7 +138,7 @@ async def faq_answer_node(state: dict) -> dict:
     logger.info(f"[FAQ] 直接回答: '{user_message[:60]}...'")
 
     try:
-        agent = _get_triage()
+        agent = _get_agent("triage")
 
         faq_prompt = (
             "你是一个智能客服助手。请根据对话历史（如有）和当前客户问题，"
@@ -232,16 +204,9 @@ async def specialist_node(state: dict, agent_name: str) -> dict:
 
     logger.info(f"[{agent_name}] 处理: '{user_message[:60]}...' (tool_round={tool_round})")
 
-    # 映射 agent_name 到对应的 Agent 类
-    agent_map = {
-        "technical": _get_technical,
-        "billing": _get_billing,
-        "product": _get_product,
-        "complaint": _get_complaint,
-    }
-
-    agent_getter = agent_map.get(agent_name)
-    if agent_getter is None:
+    # 校验 Agent 名称
+    valid_specialists = {"technical", "billing", "product", "complaint"}
+    if agent_name not in valid_specialists:
         return {
             "status": ConversationStatus.ERROR.value,
             "errors": [AgentError(
@@ -252,7 +217,7 @@ async def specialist_node(state: dict, agent_name: str) -> dict:
         }
 
     try:
-        agent = agent_getter()
+        agent = _get_agent(agent_name)
 
         # 构造增强的 user_message（如果有工具执行结果）
         enhanced_message = user_message
@@ -437,7 +402,7 @@ async def supervisor_node(state: dict) -> dict:
     logger.info(f"[Supervisor] 审查来自 {specialist_agent} 的升级: {escalation_reason[:80]}")
 
     try:
-        agent = _get_supervisor()
+        agent = _get_agent("supervisor")
 
         # 构建升级上下文
         context = (
@@ -606,7 +571,7 @@ async def build_customer_service_graph() -> StateGraph:
     )
 
     # faq_answer → END
-    builder.add_conditional_edges("faq_answer", route_after_faq, {"__end__": END})
+    builder.add_edge("faq_answer", END)
 
     # 每个 specialist → 条件路由（含工具执行）
     for specialist in ["technical", "billing", "product", "complaint"]:
@@ -648,7 +613,7 @@ async def build_customer_service_graph() -> StateGraph:
     )
 
     # human_handoff → END
-    builder.add_conditional_edges("human_handoff", route_after_handoff, {"__end__": END})
+    builder.add_edge("human_handoff", END)
 
     # --- 编译 ---
     # 使用动态 checkpointer（开发: MemorySaver, 生产: PostgresSaver）
@@ -662,6 +627,26 @@ async def build_customer_service_graph() -> StateGraph:
 # ============================================================
 # 便捷执行函数
 # ============================================================
+
+
+def _build_initial_state(
+    session_id: str,
+    user_message: str,
+    customer_id: str = "",
+    history_messages: Optional[list[dict]] = None,
+) -> tuple[dict, dict]:
+    """构建初始 state 和 thread_config（提取公共模式）"""
+    initial_state = create_initial_state(
+        session_id=session_id,
+        customer_id=customer_id,
+        max_escalation_rounds=config.MAX_ESCALATION_ROUNDS,
+    )
+    initial_state["user_message"] = user_message
+    if history_messages:
+        initial_state["messages"] = list(history_messages)
+    thread_config = {"configurable": {"thread_id": session_id}}
+    return initial_state, thread_config
+
 
 async def run_customer_service(
     session_id: str,
@@ -687,20 +672,9 @@ async def run_customer_service(
         from src.api.deps import get_graph
         graph = await get_graph()
 
-    initial_state = create_initial_state(
-        session_id=session_id,
-        customer_id=customer_id,
-        max_escalation_rounds=config.MAX_ESCALATION_ROUNDS,
+    initial_state, thread_config = _build_initial_state(
+        session_id, user_message, customer_id, history_messages,
     )
-
-    initial_state["user_message"] = user_message
-
-    if history_messages:
-        initial_state["messages"] = list(history_messages)
-
-    # 使用稳定的 session_id 作为 thread_id（不附加随机数）
-    # 这样 PostgresSaver 可以跨请求持久化状态
-    thread_config = {"configurable": {"thread_id": session_id}}
 
     final_state = await graph.ainvoke(initial_state, thread_config)
     return final_state
@@ -730,19 +704,9 @@ async def run_customer_service_stream(
         from src.api.deps import get_graph
         graph = await get_graph()
 
-    initial_state = create_initial_state(
-        session_id=session_id,
-        customer_id=customer_id,
-        max_escalation_rounds=config.MAX_ESCALATION_ROUNDS,
+    initial_state, thread_config = _build_initial_state(
+        session_id, user_message, customer_id, history_messages,
     )
-
-    initial_state["user_message"] = user_message
-
-    if history_messages:
-        initial_state["messages"] = list(history_messages)
-
-    # 使用稳定的 session_id 作为 thread_id（不附加随机数）
-    thread_config = {"configurable": {"thread_id": session_id}}
 
     async for event in graph.astream(initial_state, thread_config, stream_mode="updates"):
         yield event
@@ -771,17 +735,11 @@ def _messages_to_history(messages: list[dict]) -> list[dict]:
 
 
 async def _execute_tool_with_auto_args(tool, tool_name: str, user_message: str, state: dict) -> dict:
-    """
-    根据工具类型自动从 user_message 或 state 推断参数并执行
-
-    这是一个简化版实现，生产环境应让 LLM 生成精确的工具调用参数。
-    """
+    """根据工具类型自动推断参数并执行"""
     # CRM 查询 — 从消息中提取客户 ID 或使用 state 中的
     if tool_name == "crm_lookup":
         customer_id = state.get("customer_id", "")
         if not customer_id:
-            # 尝试从消息中提取: "cust_xxx" 格式
-            import re
             match = re.search(r'cust_\w+', user_message)
             customer_id = match.group(0) if match else ""
         if not customer_id:
@@ -790,7 +748,6 @@ async def _execute_tool_with_auto_args(tool, tool_name: str, user_message: str, 
 
     # 订单查询 — 提取订单 ID
     elif tool_name in ("order_lookup", "order_status"):
-        import re
         match = re.search(r'ord_\w+', user_message)
         order_id = match.group(0) if match else ""
         if not order_id:
@@ -825,8 +782,6 @@ async def _execute_tool_with_auto_args(tool, tool_name: str, user_message: str, 
 
 def _build_routing_decision(triage_result) -> dict:
     """从 TriageResult 构建路由决策"""
-    from src.models.routing import RoutingDecision
-
     intent = triage_result.primary_intent
     route = triage_result.recommended_agent
 

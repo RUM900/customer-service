@@ -7,7 +7,7 @@
 - API 路由层无需关心底层实现
 """
 import logging
-from typing import Optional
+from typing import Any, Optional
 from datetime import datetime
 from uuid import uuid4
 
@@ -70,7 +70,7 @@ class StorageProvider:
         except Exception:
             pass
 
-    async def _db_execute(self, operation) -> any:
+    async def _db_execute(self, operation) -> Any:
         """
         执行 DB 操作，自动管理 session 生命周期
 

@@ -8,7 +8,7 @@ import logging
 from typing import Optional
 
 from src.agents.base import BaseAgent
-from src.agents.specialist_base import SpecialistResponse
+from src.agents.specialist_base import SpecialistResponse, build_specialist_context
 import config
 
 logger = logging.getLogger(__name__)
@@ -82,20 +82,7 @@ class TechnicalAgent(BaseAgent):
         Returns:
             SpecialistResponse
         """
-        context = f"客户消息：{user_message}"
-        if triage_summary:
-            context += f"\n\n分诊摘要：{triage_summary}"
-
-        history_context = ""
-        if history:
-            recent = history[-6:]
-            history_context = "\n".join(
-                f"[{m.get('role', '?')}]: {m.get('content', '')[:150]}"
-                for m in recent
-            )
-
-        if history_context:
-            context += f"\n\n对话历史：\n{history_context}"
+        context = build_specialist_context(user_message, triage_summary, history)
 
         logger.info(f"Technical: 处理 '{user_message[:60]}...'")
 

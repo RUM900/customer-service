@@ -3,7 +3,6 @@
 
 所有路由决策的纯函数，不依赖外部状态。
 """
-from typing import Literal
 
 from src.models.routing import IntentType
 
@@ -137,22 +136,4 @@ def route_after_supervisor(state: dict) -> str:
         return specialist
 
     # resolve / reject → 结束
-    return "__end__"
-
-
-# ============================================================
-# FAQ Answer → 结束
-# ============================================================
-
-def route_after_faq(state: dict) -> Literal["__end__"]:
-    """FAQ 回答后直接结束"""
-    return "__end__"
-
-
-# ============================================================
-# Human Handoff → 结束
-# ============================================================
-
-def route_after_handoff(state: dict) -> Literal["__end__"]:
-    """转人工后结束（人工接管）"""
     return "__end__"

@@ -8,7 +8,7 @@ from src.agents.billing import BillingAgent
 from src.agents.product import ProductAgent
 from src.agents.complaint import ComplaintAgent
 from src.agents.supervisor import SupervisorAgent
-from src.agents.specialist_base import SpecialistResponse, SupervisorDecision
+from src.agents.specialist_base import SpecialistResponse, SupervisorDecision, build_specialist_context
 
 __all__ = [
     "BaseAgent",
@@ -20,4 +20,5 @@ __all__ = [
     "SupervisorAgent",
     "SpecialistResponse",
     "SupervisorDecision",
+    "build_specialist_context",
 ]

@@ -12,6 +12,7 @@ def inject_format_guide(messages: list[dict], schema: dict) -> None:
 
     供所有 Provider 的结构化输出方法使用。
     在 system message 末尾追加目标 JSON 格式说明。
+    如果没有 system message，则在开头插入一条。
 
     Args:
         messages: 消息列表（原地修改）
@@ -36,7 +37,6 @@ def inject_format_guide(messages: list[dict], schema: dict) -> None:
 
     format_text = "{\n" + ",\n".join(fields_desc) + "\n}"
 
-    # 找到系统消息并追加格式指南
     for msg in messages:
         if msg.get("role") == "system":
             msg["content"] = (
@@ -45,3 +45,12 @@ def inject_format_guide(messages: list[dict], schema: dict) -> None:
                 f"注意：只返回 JSON 本身，不要包含 ``` 标记或任何解释文字。"
             )
             return
+
+    # 没有 system message => 在开头插入一条
+    messages.insert(0, {
+        "role": "system",
+        "content": (
+            f"你必须只返回纯 JSON，格式如下：\n{format_text}\n"
+            f"注意：只返回 JSON 本身，不要包含 ``` 标记或任何解释文字。"
+        ),
+    })

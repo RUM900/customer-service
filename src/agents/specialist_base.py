@@ -145,3 +145,43 @@ class SupervisorDecision(BaseModel):
         default=True,
         description="升级案例默认创建工单"
     )
+
+
+# ============================================================
+# 共享上下文构建
+# ============================================================
+
+def build_specialist_context(
+    user_message: str,
+    triage_summary: str = "",
+    history: Optional[list[dict]] = None,
+    triage_prefix: str = "分诊摘要",
+) -> str:
+    """
+    构建 Specialist Agent 的 user prompt 上下文
+
+    所有 Specialist Agent 共享相同的上下文构建逻辑。
+
+    Args:
+        user_message: 客户消息
+        triage_summary: 分诊摘要
+        history: 对话历史（可选）
+        triage_prefix: 分诊摘要前缀（可定制，如 "分诊摘要（注意情感状态）"）
+
+    Returns:
+        构建好的上下文文本
+    """
+    context = f"客户消息：{user_message}"
+    if triage_summary:
+        context += f"\n\n{triage_prefix}：{triage_summary}"
+
+    if history:
+        recent = history[-6:]
+        history_lines = [
+            f"[{m.get('role', '?')}]: {m.get('content', '')[:150]}"
+            for m in recent
+        ]
+        if history_lines:
+            context += f"\n\n对话历史：\n" + "\n".join(history_lines)
+
+    return context

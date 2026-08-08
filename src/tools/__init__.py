@@ -6,7 +6,7 @@ from src.tools.registry import ToolRegistry
 from src.tools.knowledge_search import KnowledgeSearchTool
 from src.tools.crm import CRMLookupTool
 from src.tools.order import OrderLookupTool, OrderStatusTool
-from src.tools.ticket import TicketCreateTool, TicketQueryTool
+from src.tools.ticket import MockTicketCreateTool, MockTicketQueryTool
 from src.tools.human_handoff import HumanHandoffTool
 
 __all__ = [
@@ -14,6 +14,6 @@ __all__ = [
     "KnowledgeSearchTool",
     "CRMLookupTool",
     "OrderLookupTool", "OrderStatusTool",
-    "TicketCreateTool", "TicketQueryTool",
+    "MockTicketCreateTool", "MockTicketQueryTool",
     "HumanHandoffTool",
 ]

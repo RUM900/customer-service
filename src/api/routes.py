@@ -52,39 +52,29 @@ router = APIRouter()
 async def chat(session_id: str, req: ChatRequest, _auth: str = Depends(require_agent)) -> ChatResponse:
     """核心对话端点 — 每轮对话执行一次完整的 LangGraph 工作流"""
     try:
-        from src.api.deps import get_graph
-        from src.state import create_initial_state
+        from src.graph.workflow import run_customer_service
 
         # --- 输入安全检测 ---
         clean_message = sanitize_user_input(req.message)
         injection_result = detect_prompt_injection(clean_message)
 
-        graph = await get_graph()
         store = get_storage()
 
-        # 获取历史消息（不做 agent 特定截断，让各 Agent 自行管理 context）
+        # 获取历史消息
         raw_history = await store.get_history(session_id, limit=config.MAX_HISTORY_TURNS * 2)
-        # 只做基础的条数限制，不做 token 级别的截断
-        # 各 Agent 在图节点中会调用 prepare_context 做自己的 token 预算管理
         history = raw_history
 
-        # 保存用户消息（保存消毒后的版本）
+        # 保存用户消息
         user_msg = Message(role=MessageRole.USER, content=clean_message)
         await store.save_message(session_id, user_msg)
 
-        # 准备初始状态
-        initial_state = create_initial_state(
+        # 执行工作流
+        final_state = await run_customer_service(
             session_id=session_id,
-            customer_id=req.customer_id,
-            max_escalation_rounds=config.MAX_ESCALATION_ROUNDS,
+            user_message=clean_message,
+            customer_id=req.customer_id or "",
+            history_messages=history,
         )
-        initial_state["user_message"] = clean_message
-        initial_state["messages"] = history
-
-        # 执行工作流（使用稳定的 session_id 作为 thread_id）
-        # PostgresSaver 依赖稳定的 thread_id 来跨请求持久化状态
-        thread_config = {"configurable": {"thread_id": session_id}}
-        final_state = await graph.ainvoke(initial_state, thread_config)
 
         # 提取结果
         reply = final_state.get("final_reply", "")

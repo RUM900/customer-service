@@ -4,16 +4,14 @@ BaseAgent — 所有 Agent 的共享基类
 提供:
 - 多 Provider LLM 调用（通过 LLMFactory 自动选择）
 - 结构化输出（JSON mode → Pydantic 校验 → 失败重试）
-- 流式输出（AsyncGenerator）
-- 指数退避重试（tenacity）
+- 普通对话 / 带历史对话 / 工具调用
 
 所有客服 Agent（Triage / Specialist / Supervisor）继承此类。
 """
-import json
 import logging
-from typing import AsyncGenerator, Optional, Type, Union
+from typing import Optional, Type
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from src.llm.base import LLMProvider, LLMFactory
 import config
@@ -28,7 +26,8 @@ class BaseAgent:
     核心方法:
     - call_structured(): LLM 结构化输出（JSON → Pydantic，自动重试）
     - call_chat(): LLM 普通文本对话
-    - call_stream(): LLM 异步流式输出
+    - call_with_history(): 带历史的 LLM 对话
+    - call_with_tools(): 带工具定义的 LLM 对话
 
     子类只需:
     1. 设置 system_prompt（类属性或构造函数传入）
@@ -72,6 +71,23 @@ class BaseAgent:
         return self._provider
 
     # ----------------------------------------------------------
+    # 消息构建辅助
+    # ----------------------------------------------------------
+
+    @staticmethod
+    def _build_messages(
+        system_prompt: str,
+        user_prompt: str,
+        extra: Optional[list[dict]] = None,
+    ) -> list[dict]:
+        """构建 LLM 消息列表，提取公共模式"""
+        messages = [{"role": "system", "content": system_prompt}]
+        if extra:
+            messages.extend(extra)
+        messages.append({"role": "user", "content": user_prompt})
+        return messages
+
+    # ----------------------------------------------------------
     # 结构化输出（JSON mode + Pydantic 校验 + 重试）
     # ----------------------------------------------------------
 
@@ -102,12 +118,7 @@ class BaseAgent:
             RuntimeError: 超过最大重试次数仍失败
         """
         max_retries = max_retries or config.MAX_RETRIES
-
-        # 构建消息列表
-        messages = [{"role": "system", "content": system_prompt}]
-        if extra_messages:
-            messages.extend(extra_messages)
-        messages.append({"role": "user", "content": user_prompt})
+        messages = self._build_messages(system_prompt, user_prompt, extra_messages)
 
         # 通过 provider 调用（provider 内部处理重试和校验）
         return await self.provider.chat_structured(
@@ -126,52 +137,9 @@ class BaseAgent:
         user_prompt: str,
         extra_messages: Optional[list[dict]] = None,
     ) -> str:
-        """
-        普通 LLM 文本对话
-
-        Args:
-            system_prompt: 系统提示
-            user_prompt: 用户输入
-            extra_messages: 额外的历史消息
-
-        Returns:
-            LLM 输出的纯文本
-        """
-        messages = [{"role": "system", "content": system_prompt}]
-        if extra_messages:
-            messages.extend(extra_messages)
-        messages.append({"role": "user", "content": user_prompt})
-
+        """普通 LLM 文本对话"""
+        messages = self._build_messages(system_prompt, user_prompt, extra_messages)
         return await self.provider.chat(messages=messages)
-
-    # ----------------------------------------------------------
-    # 流式对话
-    # ----------------------------------------------------------
-
-    async def call_stream(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        extra_messages: Optional[list[dict]] = None,
-    ) -> AsyncGenerator[str, None]:
-        """
-        异步流式 LLM 对话，逐 token yield
-
-        Args:
-            system_prompt: 系统提示
-            user_prompt: 用户输入
-            extra_messages: 额外的历史消息
-
-        Yields:
-            str: 每次 yield 一个 token 片段
-        """
-        messages = [{"role": "system", "content": system_prompt}]
-        if extra_messages:
-            messages.extend(extra_messages)
-        messages.append({"role": "user", "content": user_prompt})
-
-        async for token in self.provider.chat_stream(messages=messages):
-            yield token
 
     # ----------------------------------------------------------
     # 多轮对话（带历史）
@@ -183,21 +151,8 @@ class BaseAgent:
         user_prompt: str,
         history: list[dict],
     ) -> str:
-        """
-        带对话历史的 LLM 调用
-
-        Args:
-            system_prompt: 系统提示
-            user_prompt: 当前用户输入
-            history: 历史消息列表（role + content），不包含 system
-
-        Returns:
-            LLM 输出文本
-        """
-        messages = [{"role": "system", "content": system_prompt}]
-        messages.extend(history)
-        messages.append({"role": "user", "content": user_prompt})
-
+        """带对话历史的 LLM 调用"""
+        messages = self._build_messages(system_prompt, user_prompt, history)
         return await self.provider.chat(messages=messages)
 
     # ----------------------------------------------------------
@@ -238,9 +193,5 @@ class BaseAgent:
             f"如需使用工具，请在回复中明确指出工具名称和参数。"
         )
 
-        messages = [{"role": "system", "content": enhanced_system}]
-        if history:
-            messages.extend(history)
-        messages.append({"role": "user", "content": user_prompt})
-
+        messages = self._build_messages(enhanced_system, user_prompt, history)
         return await self.provider.chat(messages=messages)
