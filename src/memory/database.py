@@ -32,14 +32,34 @@ def get_engine():
     """懒加载异步 engine"""
     global _engine
     if _engine is None:
-        _engine = create_async_engine(
-            config.DATABASE_URL,
-            pool_size=config.DATABASE_POOL_SIZE,
-            max_overflow=config.DATABASE_POOL_OVERFLOW,
-            echo=False,
-        )
-        logger.info(f"数据库引擎已创建: {config.DATABASE_URL.split('@')[-1]}")
+        url = config.DATABASE_URL
+        kwargs = {
+            "pool_size": config.DATABASE_POOL_SIZE,
+            "max_overflow": config.DATABASE_POOL_OVERFLOW,
+            "echo": False,
+        }
+        if url.startswith("sqlite"):
+            # SQLite 并发写锁缓解: busy timeout
+            kwargs["connect_args"] = {"timeout": 30}
+        _engine = create_async_engine(url, **kwargs)
+        if url.startswith("sqlite"):
+            _enable_sqlite_wal(_engine)
+        logger.info(f"数据库引擎已创建: {url.split('@')[-1]}")
     return _engine
+
+
+def _enable_sqlite_wal(engine):
+    """SQLite 启用 WAL 模式，缓解读写并发锁"""
+    from sqlalchemy import event
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _set_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=30000")
+        finally:
+            cursor.close()
 
 
 def get_session_factory() -> async_sessionmaker:
@@ -117,6 +137,16 @@ async def init_db():
             await conn.exec_driver_sql("SELECT 1")
         logger.info("数据库连接验证成功")
     else:
+        # 惰性导入所有 ORM 模型，确保 Base.metadata 包含全部表
+        # （database.py 与各 store 模块存在循环依赖，不能在模块顶部 import）
+        from src.memory.session import SessionRow
+        from src.memory.conversation import MessageRow
+        from src.memory.ticket_store import TicketRow
+        from src.memory.user import UserRow
+        from src.memory.model_config import AgentModelRow
+        from src.memory.faq_store import FaqRow
+        from src.memory.review import ReviewRow
+
         engine = get_engine()
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)

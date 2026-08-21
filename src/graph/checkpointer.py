@@ -85,4 +85,4 @@ def _convert_to_sync_url(async_url: str) -> str:
     postgresql+asyncpg://user:pass@host:5432/db
     → postgresql://user:pass@host:5432/db
     """
-    return async_url.replace("+asyncpg", "")
+    return async_url.replace("+asyncpg", "").replace("+aiosqlite", "")

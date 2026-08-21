@@ -205,9 +205,11 @@ class KnowledgeSearchTool(BaseTool):
             logger.warning("ChromaDB 未初始化，跳过索引")
             return
 
-        # 清空已有数据
+        # 只删除 FAQ 类条目（kind=faq），避免误删上传文档
         try:
-            self._collection.delete(where={})
+            existing = self._collection.get(where={"kind": "faq"})
+            if existing and existing["ids"]:
+                self._collection.delete(ids=existing["ids"])
         except Exception:
             pass
 
@@ -224,6 +226,8 @@ class KnowledgeSearchTool(BaseTool):
                 "question": entry.get("question", ""),
                 "category": entry.get("category", "general"),
                 "tags": ",".join(entry.get("tags", [])),
+                "kind": "faq",
+                "source": entry.get("source") or "faq_samples.json",
             })
 
         if ids:

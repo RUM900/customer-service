@@ -60,8 +60,10 @@ class TechnicalAgent(BaseAgent):
     """技术支持 Agent"""
 
     def __init__(self):
+        from src.api.model_registry import get_model
+
         super().__init__(
-            model=config.MODEL_SPECIALIST,
+            model=get_model("technical"),
             temperature=0.2,
         )
 

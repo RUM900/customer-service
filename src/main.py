@@ -46,6 +46,34 @@ async def lifespan(app: FastAPI):
     logger.info(f"Swagger: http://{config.API_HOST}:{config.API_PORT}/docs")
     logger.info("=" * 60)
 
+    # === 初始化数据库（开发模式自动建表，失败则降级内存）===
+    try:
+        from src.memory.database import init_db
+        await init_db()
+    except Exception as e:
+        logger.warning(f"数据库初始化失败，降级内存存储: {e}")
+
+    # === 种子默认管理员账号 ===
+    try:
+        from src.memory.user import seed_admin
+        await seed_admin()
+    except Exception as e:
+        logger.warning(f"管理员账号初始化失败: {e}")
+
+    # === 加载 Agent 模型配置（DB → 内存缓存） ===
+    try:
+        from src.api.model_registry import load_from_db
+        await load_from_db()
+    except Exception as e:
+        logger.warning(f"模型配置加载失败: {e}")
+
+    # === FAQ 数据：种子 + 同步到检索工具/向量库 ===
+    try:
+        from src.api.faq_service import reload_faqs
+        await reload_faqs()
+    except Exception as e:
+        logger.warning(f"FAQ 数据加载失败: {e}")
+
     yield
 
     # === 关闭 ===
@@ -91,6 +119,8 @@ setup_middleware(app)
 app.include_router(router)
 from src.api.admin_routes import router as admin_router
 app.include_router(admin_router)
+from src.api.admin_auth_routes import router as admin_auth_router
+app.include_router(admin_auth_router)
 
 
 # ============================================================
@@ -102,6 +132,14 @@ async def chat_ui():
     """内置 Web 聊天界面"""
     from pathlib import Path
     html_path = Path(__file__).parent / "static" / "chat.html"
+    return html_path.read_text(encoding="utf-8")
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_ui():
+    """内置管理后台界面"""
+    from pathlib import Path
+    html_path = Path(__file__).parent / "static" / "admin.html"
     return html_path.read_text(encoding="utf-8")
 
 

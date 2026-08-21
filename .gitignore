@@ -5,3 +5,6 @@ __pycache__/
 data/chroma/
 .pytest_cache/
 *.egg-info/
+*.db
+*.db-wal
+*.db-shm

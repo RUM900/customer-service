@@ -68,7 +68,7 @@ RETRY_MAX_WAIT = int(os.getenv("RETRY_MAX_WAIT", "30"))
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@localhost:5432/customer_service",
+    "sqlite+aiosqlite:///./customer_service.db",
 )
 DATABASE_POOL_SIZE = int(os.getenv("DATABASE_POOL_SIZE", "10"))
 DATABASE_POOL_OVERFLOW = int(os.getenv("DATABASE_POOL_OVERFLOW", "20"))
@@ -131,6 +131,21 @@ API_KEY = os.getenv("API_KEY", "")
 
 # 管理端 API Key（用于 /admin 端点，HITL 审核等）
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
+
+# ============================================================
+# JWT 认证配置
+# ============================================================
+
+JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
+
+# 首次启动时自动创建的默认管理员账号（仅当数据库无任何管理员时生效）
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+
+# 模型配置校验开关（管理员修改模型名时是否调用 LLM 探活）
+MODEL_VALIDATION_ENABLED = os.getenv("MODEL_VALIDATION_ENABLED", "true").lower() in ("true", "1", "yes")
 
 # ============================================================
 # API 配置

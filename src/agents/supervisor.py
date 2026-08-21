@@ -75,8 +75,10 @@ class SupervisorAgent(BaseAgent):
     """监管 Agent"""
 
     def __init__(self):
+        from src.api.model_registry import get_model
+
         super().__init__(
-            model=config.MODEL_SUPERVISOR,
+            model=get_model("supervisor"),
             temperature=0.15,
         )
 

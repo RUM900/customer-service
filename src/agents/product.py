@@ -52,8 +52,10 @@ class ProductAgent(BaseAgent):
     """产品咨询 Agent"""
 
     def __init__(self):
+        from src.api.model_registry import get_model
+
         super().__init__(
-            model=config.MODEL_SPECIALIST,
+            model=get_model("product"),
             temperature=0.3,  # 产品推荐需要一点创造性
         )
 

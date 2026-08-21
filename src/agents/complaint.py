@@ -62,8 +62,10 @@ class ComplaintAgent(BaseAgent):
     """投诉处理 Agent"""
 
     def __init__(self):
+        from src.api.model_registry import get_model
+
         super().__init__(
-            model=config.MODEL_SPECIALIST,
+            model=get_model("complaint"),
             temperature=0.3,  # 投诉处理需要一定的情感智能
         )
 

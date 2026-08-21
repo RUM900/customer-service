@@ -3,21 +3,61 @@ API 认证与鉴权
 
 提供 FastAPI 依赖注入函数，用于保护 API 端点。
 
-方案: API Key + Role-Based 鉴权
-- 客户端端点 (/chat, /sessions, /tickets) → X-API-Key header
-- 管理端点 (/admin/*) → X-Admin-API-Key header
+方案: JWT（管理员账号）+ API Key 双轨
+- 管理员端点 (/admin/*) → Authorization: Bearer <JWT>（首选），回落 X-Admin-API-Key
+- 客户端端点 (/chat, /sessions, /tickets) → X-API-Key header（开发可关闭）
 
-支持通过配置关闭认证（开发环境）。
+角色预留: role=customer 已设计，待开放终端客户登录时启用 require_user。
 """
 import logging
+from datetime import datetime, timedelta
 from typing import Optional
 
+import jwt as pyjwt
 from fastapi import HTTPException, Request, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 import config
 
 logger = logging.getLogger(__name__)
+
+# ============================================================
+# JWT 签发与校验
+# ============================================================
+
+
+def create_token(user_id: str, username: str, role: str) -> str:
+    """签发 JWT"""
+    now = datetime.utcnow()
+    payload = {
+        "sub": user_id,
+        "username": username,
+        "role": role,
+        "iat": now,
+        "exp": now + timedelta(hours=config.JWT_EXPIRE_HOURS),
+    }
+    return pyjwt.encode(payload, config.JWT_SECRET, algorithm=config.JWT_ALGORITHM)
+
+
+def decode_token(token: str) -> Optional[dict]:
+    """校验并解析 JWT，无效返回 None"""
+    try:
+        return pyjwt.decode(
+            token,
+            config.JWT_SECRET,
+            algorithms=[config.JWT_ALGORITHM],
+        )
+    except Exception:
+        return None
+
+
+def get_bearer_token(request: Request) -> Optional[str]:
+    """从 Authorization: Bearer <token> 提取 token"""
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        return auth_header[7:].strip()
+    return None
+
 
 # ============================================================
 # Bearer Token 方案（可选，用于 JWT 扩展）
@@ -112,16 +152,31 @@ async def require_agent(request: Request) -> str:
 
 async def require_admin(request: Request) -> str:
     """
-    验证管理端 API Key
+    验证管理员身份 — 用于 /admin/* 管理端点
 
-    用于 /admin/knowledge, /admin/reviews 等管理端点。
+    校验顺序:
+    1. Authorization: Bearer <JWT>（管理员登录签发，首选）
+    2. X-Admin-API-Key / X-API-Key（旧 API Key 方式，回落）
 
     Returns:
-        验证通过的 Admin API Key 标识
+        认证标识
 
     Raises:
-        HTTPException 401: 未提供或无效的 Admin API Key
+        HTTPException 401: 未提供或无效的凭证
     """
+    # 1. JWT 优先（管理员登录后签发，不依赖 AUTH_ENABLED 开关）
+    token = get_bearer_token(request)
+    if token:
+        payload = decode_token(token)
+        if payload and payload.get("role") == "admin":
+            return "admin_authenticated"
+        raise HTTPException(
+            status_code=401,
+            detail="无效或已过期的管理员令牌，请重新登录",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # 2. 回落 API Key 逻辑
     # 如果认证未启用，跳过
     if not config.AUTH_ENABLED:
         return "auth_disabled"
@@ -138,7 +193,7 @@ async def require_admin(request: Request) -> str:
     if not provided_key:
         raise HTTPException(
             status_code=401,
-            detail="未提供 Admin API Key。请在 X-Admin-API-Key header 中提供有效的管理员 Key。",
+            detail="未提供管理凭证。请使用登录后的 Bearer token，或 X-Admin-API-Key header。",
             headers={"WWW-Authenticate": "ApiKey"},
         )
 
@@ -150,6 +205,29 @@ async def require_admin(request: Request) -> str:
         )
 
     return "admin_authenticated"
+
+
+async def require_user(request: Request) -> str:
+    """
+    验证任意已登录用户（管理员或客户）— 预留，待客户登录开放后启用
+
+    当前仅校验 JWT 有效性，不做角色限制。
+    """
+    token = get_bearer_token(request)
+    if token:
+        payload = decode_token(token)
+        if payload and payload.get("sub"):
+            return "user_authenticated"
+        raise HTTPException(
+            status_code=401,
+            detail="无效或已过期的令牌",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # 无 JWT 时回落 API Key（与 require_agent 一致）
+    if not config.AUTH_ENABLED:
+        return "auth_disabled"
+    return await require_agent(request)
 
 
 # ============================================================

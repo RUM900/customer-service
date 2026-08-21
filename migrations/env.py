@@ -34,7 +34,9 @@ import config as app_config
 
 # 将 asyncpg URL 转为标准格式（Alembic 需要同步 URL 来生成 migration）
 # 对于 upgrade/downgrade，我们用 async engine
-_sync_url = app_config.DATABASE_URL.replace("+asyncpg", "")
+_sync_url = (
+    app_config.DATABASE_URL.replace("+asyncpg", "").replace("+aiosqlite", "")
+)
 config.set_main_option("sqlalchemy.url", _sync_url)
 
 # ============================================================
@@ -44,9 +46,13 @@ config.set_main_option("sqlalchemy.url", _sync_url)
 from src.memory.database import Base
 
 # 导入所有 ORM 模型（确保 Base.metadata 包含所有表）
-from src.memory.session import SessionRow       # noqa: F401
+from src.memory.session import SessionRow        # noqa: F401
 from src.memory.conversation import MessageRow   # noqa: F401
 from src.memory.ticket_store import TicketRow    # noqa: F401
+from src.memory.user import UserRow              # noqa: F401
+from src.memory.model_config import AgentModelRow  # noqa: F401
+from src.memory.faq_store import FaqRow          # noqa: F401
+from src.memory.review import ReviewRow          # noqa: F401
 
 target_metadata = Base.metadata
 

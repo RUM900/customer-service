@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>客服系统管理后台</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font: 14px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; min-height: 100vh; }
+.sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: 220px; background: #1a1a2e; color: #eee; display: flex; flex-direction: column; }
+.sidebar-header { padding: 18px 20px; border-bottom: 1px solid #333; }
+.sidebar-header h2 { font-size: 16px; color: #e94560; }
+.sidebar-header p { font-size: 12px; color: #999; margin-top: 2px; }
+.nav { flex: 1; padding: 10px 0; }
+.nav-item { display: block; width: 100%; padding: 12px 20px; background: none; border: none; color: #ccc; text-align: left; cursor: pointer; font-size: 14px; }
+.nav-item:hover { background: #16213e; }
+.nav-item.active { background: #0f3460; color: #fff; border-left: 3px solid #e94560; }
+.sidebar-footer { padding: 14px 20px; border-top: 1px solid #333; font-size: 12px; color: #888; display: flex; justify-content: space-between; align-items: center; }
+.sidebar-footer button { background: #e94560; color: #fff; border: none; border-radius: 5px; padding: 6px 12px; cursor: pointer; font-size: 12px; }
+.main { margin-left: 220px; padding: 24px 32px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.page-header h3 { font-size: 18px; color: #1a1a2e; }
+.page-header .desc { color: #888; font-size: 13px; }
+.card { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.06); padding: 20px; margin-bottom: 20px; }
+.card h4 { font-size: 15px; margin-bottom: 12px; color: #1a1a2e; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 13px; vertical-align: top; }
+th { color: #666; font-weight: 600; background: #fafafa; }
+tr:hover td { background: #fafbfc; }
+input[type=text], input[type=password], textarea, select { padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; width: 100%; outline: none; }
+input:focus, textarea:focus { border-color: #e94560; }
+textarea { min-height: 70px; resize: vertical; }
+.btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.btn-primary { background: #e94560; color: #fff; }
+.btn-primary:hover { background: #d83854; }
+.btn-secondary { background: #0f3460; color: #fff; }
+.btn-danger { background: #d32f2f; color: #fff; }
+.btn-ghost { background: #eee; color: #333; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn:disabled { background: #ccc; cursor: not-allowed; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-right: 4px; }
+.tag-pending { background: #fff3e0; color: #e65100; }
+.tag-approved { background: #e8f5e9; color: #2e7d32; }
+.tag-rejected { background: #fce4ec; color: #c62828; }
+.tag-supervisor { background: #ede7f6; color: #4527a0; }
+.tag-handoff { background: #e3f2fd; color: #1565c0; }
+.form-row { display: flex; gap: 12px; margin-bottom: 12px; }
+.form-row > div { flex: 1; }
+.form-row label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; }
+.empty { color: #aaa; text-align: center; padding: 40px 0; font-size: 13px; }
+#loginView { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+.login-card { background: #fff; border-radius: 12px; padding: 36px 40px; width: 360px; box-shadow: 0 8px 30px rgba(0,0,0,.1); }
+.login-card h2 { color: #e94560; margin-bottom: 4px; font-size: 20px; }
+.login-card p { color: #999; font-size: 13px; margin-bottom: 22px; }
+.login-card label { display: block; font-size: 12px; color: #666; margin: 12px 0 4px; }
+.login-card .btn { width: 100%; margin-top: 18px; padding: 11px; }
+#appView { display: none; }
+#msg { display: none; padding: 8px 16px; border-radius: 6px; margin-bottom: 12px; font-size: 13px; }
+#msg.error { background: #ffebee; color: #c62828; }
+#msg.success { background: #e8f5e9; color: #2e7d32; }
+</style>
+</head>
+<body>
+
+<!-- 登录视图 -->
+<div id="loginView">
+  <div class="login-card">
+    <h2>客服系统管理后台</h2>
+    <p>请使用管理员账号登录</p>
+    <label>用户名</label>
+    <input type="text" id="loginUsername" placeholder="admin">
+    <label>密码</label>
+    <input type="password" id="loginPassword" placeholder="admin123" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn btn-primary" onclick="doLogin()">登 录</button>
+  </div>
+</div>
+
+<!-- 主视图 -->
+<div id="appView">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>客服系统后台</h2>
+      <p id="loginInfo"></p>
+    </div>
+    <div class="nav">
+      <button class="nav-item active" data-tab="models" onclick="switchTab('models')">🤖 模型配置</button>
+      <button class="nav-item" data-tab="faqs" onclick="switchTab('faqs')">📚 FAQ 管理</button>
+      <button class="nav-item" data-tab="docs" onclick="switchTab('docs')">📄 知识库文档</button>
+      <button class="nav-item" data-tab="reviews" onclick="switchTab('reviews')">🛡️ 人工审核队列</button>
+    </div>
+    <div class="sidebar-footer">
+      <span id="userName"></span>
+      <button onclick="logout()">退出</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div id="msg"></div>
+
+    <!-- 模型配置 -->
+    <div class="tab-page" id="tab-models">
+      <div class="page-header"><h3>Agent 模型配置</h3><span class="desc">修改后立即生效（自动重建 Agent 实例）</span></div>
+      <div class="card">
+        <table>
+          <thead><tr><th style="width:180px">Agent</th><th>模型</th><th style="width:140px">操作</th></tr></thead>
+          <tbody id="modelsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- FAQ 管理 -->
+    <div class="tab-page" id="tab-faqs" style="display:none">
+      <div class="page-header"><h3>FAQ 管理</h3><span class="desc">新增/编辑后自动同步到聊天知识库</span></div>
+      <div class="card">
+        <h4 id="faqFormTitle">新增 FAQ</h4>
+        <div class="form-row">
+          <div><label>问题</label><input type="text" id="faqQuestion" placeholder="常见问题标题"></div>
+          <div><label>分类</label>
+            <select id="faqCategory">
+              <option value="general">通用 general</option>
+              <option value="order">订单 order</option>
+              <option value="billing">账务 billing</option>
+              <option value="product">产品 product</option>
+              <option value="technical">技术 technical</option>
+              <option value="account">账户 account</option>
+            </select>
+          </div>
+          <div style="flex:0 0 120px"><label>优先级</label><input type="text" id="faqPriority" placeholder="10"></div>
+        </div>
+        <div class="form-row">
+          <div><label>答案</label><textarea id="faqAnswer" placeholder="标准答案"></textarea></div>
+        </div>
+        <button class="btn btn-primary" onclick="saveFaq()">保存 FAQ</button>
+        <button class="btn btn-ghost" id="faqCancel" style="display:none" onclick="cancelFaqEdit()">取消编辑</button>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr><th>问题</th><th style="width:90px">分类</th><th style="width:70px">优先级</th><th style="width:130px">操作</th></tr></thead>
+          <tbody id="faqsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 知识库文档 -->
+    <div class="tab-page" id="tab-docs" style="display:none">
+      <div class="page-header"><h3>知识库文档</h3><span class="desc">支持 PDF / DOCX / MD / TXT / CSV / HTML / PPTX</span></div>
+      <div class="card">
+        <h4>上传文档</h4>
+        <div class="form-row">
+          <div style="flex:0 0 260px"><label>选择文件</label><input type="file" id="docFile"></div>
+        </div>
+        <button class="btn btn-primary" onclick="uploadDoc()">上传并索引</button>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr><th>文件名</th><th style="width:80px">格式</th><th style="width:80px">块数</th><th style="width:130px">操作</th></tr></thead>
+          <tbody id="docsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 人工审核队列 -->
+    <div class="tab-page" id="tab-reviews" style="display:none">
+      <div class="page-header"><h3>人工审核队列</h3><span class="desc">Supervisor 高风险决策 + 客户转人工申请</span></div>
+      <div class="card">
+        <table>
+          <thead><tr><th>类型</th><th>会话</th><th>内容</th><th>审核项</th><th style="width:180px">操作</th></tr></thead>
+          <tbody id="reviewsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var TOKEN_KEY = 'cs_admin_token';
+var AGENT_LABELS = { triage: '分诊 Triage', technical: '技术 Technical', billing: '账务 Billing', product: '产品 Product', complaint: '投诉 Complaint', supervisor: '主管 Supervisor' };
+
+function token() { return localStorage.getItem(TOKEN_KEY) || ''; }
+function authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token() }; }
+function showMsg(text, isError) {
+  var el = document.getElementById('msg');
+  el.textContent = text;
+  el.className = isError ? 'error' : 'success';
+  el.style.display = 'block';
+  setTimeout(function() { el.style.display = 'none'; }, 4000);
+}
+
+async function api(url, opts) {
+  opts = opts || {};
+  opts.headers = opts.headers || authHeaders();
+  var res = await fetch(url, opts);
+  if (res.status === 401) { logout(); throw new Error('登录已过期，请重新登录'); }
+  if (!res.ok) {
+    var body = null;
+    try { body = await res.json(); } catch (e) {}
+    throw new Error((body && (body.detail || body.error)) || ('HTTP ' + res.status));
+  }
+  return res.json();
+}
+
+// ============================================================
+// 登录
+// ============================================================
+function initView() {
+  if (token()) {
+    document.getElementById('loginView').style.display = 'none';
+    document.getElementById('appView').style.display = 'block';
+    document.getElementById('userName').textContent = 'admin';
+    switchTab('models');
+    loadAll();
+  } else {
+    document.getElementById('appView').style.display = 'none';
+    document.getElementById('loginView').style.display = 'flex';
+  }
+}
+
+async function doLogin() {
+  var username = document.getElementById('loginUsername').value.trim();
+  var password = document.getElementById('loginPassword').value;
+  if (!username || !password) { showMsg('请输入用户名和密码', true); return; }
+  try {
+    var data = await fetch('/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: username, password: password })
+    }).then(function(r) { if (!r.ok) return r.json().then(function(b) { throw new Error(b.detail || 'HTTP ' + r.status); }); return r.json(); });
+    localStorage.setItem(TOKEN_KEY, data.access_token);
+    initView();
+  } catch (e) { showMsg('登录失败: ' + e.message, true); }
+}
+
+function logout() {
+  localStorage.removeItem(TOKEN_KEY);
+  initView();
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.nav-item').forEach(function(el) { el.classList.toggle('active', el.dataset.tab === tab); });
+  document.querySelectorAll('.tab-page').forEach(function(el) { el.style.display = 'none'; });
+  document.getElementById('tab-' + tab).style.display = 'block';
+  if (tab === 'models') loadModels();
+  if (tab === 'faqs') loadFaqs();
+  if (tab === 'docs') loadDocs();
+  if (tab === 'reviews') loadReviews();
+}
+
+function loadAll() { loadModels(); loadFaqs(); loadDocs(); loadReviews(); }
+
+// ============================================================
+// 模型配置
+// ============================================================
+async function loadModels() {
+  try {
+    var data = await api('/admin/model-config');
+    var html = '';
+    var order = ['triage', 'technical', 'billing', 'product', 'complaint', 'supervisor'];
+    order.forEach(function(agent) {
+      html += '<tr><td><b>' + (AGENT_LABELS[agent] || agent) + '</b></td>' +
+        '<td><input type="text" id="model-' + agent + '" value="' + (data.models[agent] || '') + '"></td>' +
+        '<td><button class="btn btn-primary btn-sm" onclick="saveModel(\'' + agent + '\')">保存</button></td></tr>';
+    });
+    document.getElementById('modelsBody').innerHTML = html;
+  } catch (e) { showMsg('加载模型配置失败: ' + e.message, true); }
+}
+
+async function saveModel(agent) {
+  var model = document.getElementById('model-' + agent).value.trim();
+  if (!model) { showMsg('模型名不能为空', true); return; }
+  try {
+    await api('/admin/model-config', { method: 'PUT', body: JSON.stringify({ agent_name: agent, model: model }) });
+    showMsg(AGENT_LABELS[agent] + ' 模型已更新为 ' + model + '，立即生效');
+  } catch (e) { showMsg('保存失败: ' + e.message, true); }
+}
+
+// ============================================================
+// FAQ
+// ============================================================
+var editingFaqId = null;
+
+async function loadFaqs() {
+  try {
+    var data = await api('/admin/faqs');
+    var html = '';
+    if (!data.faqs.length) html = '<tr><td colspan="4" class="empty">暂无 FAQ</td></tr>';
+    data.faqs.forEach(function(f) {
+      html += '<tr><td><b>' + f.question + '</b><br><span style="color:#888;font-size:12px">' + f.answer.slice(0, 80) + (f.answer.length > 80 ? '...' : '') + '</span></td>' +
+        '<td>' + f.category + '</td><td>' + f.priority + '</td>' +
+        '<td><button class="btn btn-secondary btn-sm" onclick="editFaq(\'' + f.faq_id + '\')">编辑</button> ' +
+        '<button class="btn btn-danger btn-sm" onclick="deleteFaq(\'' + f.faq_id + '\')">删除</button></td></tr>';
+    });
+    document.getElementById('faqsBody').innerHTML = html;
+  } catch (e) { showMsg('加载 FAQ 失败: ' + e.message, true); }
+}
+
+async function editFaq(id) {
+  try {
+    var data = await api('/admin/faqs');
+    var f = data.faqs.filter(function(x) { return x.faq_id === id; })[0];
+    if (!f) return;
+    editingFaqId = id;
+    document.getElementById('faqQuestion').value = f.question;
+    document.getElementById('faqAnswer').value = f.answer;
+    document.getElementById('faqCategory').value = f.category;
+    document.getElementById('faqPriority').value = f.priority;
+    document.getElementById('faqFormTitle').textContent = '编辑 FAQ';
+    document.getElementById('faqCancel').style.display = 'inline-block';
+    window.scrollTo(0, 0);
+  } catch (e) { showMsg('加载 FAQ 失败: ' + e.message, true); }
+}
+
+function cancelFaqEdit() {
+  editingFaqId = null;
+  document.getElementById('faqQuestion').value = '';
+  document.getElementById('faqAnswer').value = '';
+  document.getElementById('faqPriority').value = '';
+  document.getElementById('faqFormTitle').textContent = '新增 FAQ';
+  document.getElementById('faqCancel').style.display = 'none';
+}
+
+async function saveFaq() {
+  var question = document.getElementById('faqQuestion').value.trim();
+  var answer = document.getElementById('faqAnswer').value.trim();
+  var category = document.getElementById('faqCategory').value;
+  var priority = parseInt(document.getElementById('faqPriority').value || '0', 10) || 0;
+  if (!question || !answer) { showMsg('问题和答案不能为空', true); return; }
+  var body = { question: question, answer: answer, category: category, priority: priority, tags: [] };
+  try {
+    if (editingFaqId) {
+      await api('/admin/faqs/' + editingFaqId, { method: 'PUT', body: JSON.stringify(body) });
+      showMsg('FAQ 已更新');
+    } else {
+      await api('/admin/faqs', { method: 'POST', body: JSON.stringify(body) });
+      showMsg('FAQ 已新增');
+    }
+    cancelFaqEdit();
+    loadFaqs();
+  } catch (e) { showMsg('保存失败: ' + e.message, true); }
+}
+
+async function deleteFaq(id) {
+  if (!confirm('确定删除该 FAQ 吗？')) return;
+  try {
+    await api('/admin/faqs/' + id, { method: 'DELETE' });
+    showMsg('FAQ 已删除');
+    loadFaqs();
+  } catch (e) { showMsg('删除失败: ' + e.message, true); }
+}
+
+// ============================================================
+// 知识库文档
+// ============================================================
+async function loadDocs() {
+  try {
+    var data = await api('/admin/knowledge/documents');
+    var html = '';
+    if (!data.documents.length) html = '<tr><td colspan="4" class="empty">暂无文档</td></tr>';
+    data.documents.forEach(function(d) {
+      html += '<tr><td>' + (d.filename || 'unknown') + '</td><td>' + (d.format || '-') + '</td><td>' + d.chunks + '</td>' +
+        '<td><button class="btn btn-danger btn-sm" onclick="deleteDoc(\'' + encodeURIComponent(d.filename) + '\')">删除</button></td></tr>';
+    });
+    document.getElementById('docsBody').innerHTML = html;
+  } catch (e) { showMsg('加载文档失败: ' + e.message, true); }
+}
+
+async function uploadDoc() {
+  var fileInput = document.getElementById('docFile');
+  if (!fileInput.files || !fileInput.files[0]) { showMsg('请选择文件', true); return; }
+  var fd = new FormData();
+  fd.append('file', fileInput.files[0]);
+  fd.append('chunk_size', '500');
+  fd.append('overlap', '50');
+  try {
+    var res = await fetch('/admin/knowledge/upload', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token() },
+      body: fd
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.detail || ('HTTP ' + res.status));
+    showMsg('上传成功: ' + data.filename + '，' + data.chunks + ' 个分块');
+    fileInput.value = '';
+    loadDocs();
+  } catch (e) { showMsg('上传失败: ' + e.message, true); }
+}
+
+async function deleteDoc(name) {
+  if (!confirm('确定删除文档索引 ' + decodeURIComponent(name) + ' 吗？')) return;
+  try {
+    await api('/admin/knowledge/documents/' + name, { method: 'DELETE' });
+    showMsg('文档已删除');
+    loadDocs();
+  } catch (e) { showMsg('删除失败: ' + e.message, true); }
+}
+
+// ============================================================
+// 人工审核队列
+// ============================================================
+var REVIEW_LABELS = { supervisor_decision: 'Supervisor 决策', human_handoff: '转人工申请' };
+
+async function loadReviews() {
+  try {
+    var data = await api('/admin/knowledge/reviews');
+    var html = '';
+    if (!data.reviews.length) html = '<tr><td colspan="5" class="empty">暂无待审核案例</td></tr>';
+    data.reviews.forEach(function(r) {
+      var items = (r.review_items || []).map(function(i) { return '<span class="tag">' + i + '</span>'; }).join('');
+      html += '<tr><td><span class="tag tag-' + (r.review_type === 'human_handoff' ? 'handoff' : 'supervisor') + '">' + (REVIEW_LABELS[r.review_type] || r.review_type) + '</span></td>' +
+        '<td>' + (r.session_id || r.thread_id || '-').slice(0, 20) + '</td>' +
+        '<td>' + (r.message || '') + '</td><td>' + items + '</td>' +
+        '<td><button class="btn btn-secondary btn-sm" onclick="resolveReview(\'' + r.thread_id + '\',\'approve\')">批准</button> ' +
+        '<button class="btn btn-danger btn-sm" onclick="resolveReview(\'' + r.thread_id + '\',\'reject\')">驳回</button></td></tr>';
+    });
+    document.getElementById('reviewsBody').innerHTML = html;
+  } catch (e) { showMsg('加载审核队列失败: ' + e.message, true); }
+}
+
+async function resolveReview(threadId, action) {
+  var note = prompt(action === 'approve' ? '批准备注（可留空）：' : '驳回原因：');
+  if (note === null) return;
+  var url = '/admin/knowledge/reviews/' + threadId + '/' + action + '?note=' + encodeURIComponent(note);
+  try {
+    await api(url, { method: 'POST' });
+    showMsg(action === 'approve' ? '已批准' : '已驳回');
+    loadReviews();
+  } catch (e) { showMsg('操作失败: ' + e.message, true); }
+}
+
+// 初始化
+initView();
+</script>
+</body>
+</html>

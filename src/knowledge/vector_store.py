@@ -117,11 +117,12 @@ class VectorStore:
         Args:
             faq_entries: [{"faq_id": ..., "question": ..., "answer": ..., "category": ..., "tags": [...]}]
         """
-        # 清空已有数据
+        # 只删除 FAQ 类条目（kind=faq），避免误删管理员上传的文档
         try:
-            ids_to_delete = self._collection.get()["ids"]
-            if ids_to_delete:
-                self._collection.delete(ids=ids_to_delete)
+            if self._collection:
+                existing = self._collection.get(where={"kind": "faq"})
+                if existing and existing["ids"]:
+                    self._collection.delete(ids=existing["ids"])
         except Exception:
             pass
 
@@ -141,9 +142,11 @@ class VectorStore:
                 "answer": entry.get("answer", ""),
                 "category": entry.get("category", "general"),
                 "tags": ",".join(entry.get("tags", [])),
+                "kind": "faq",
+                "source": entry.get("source") or "faq_samples.json",
             })
 
-        if ids:
+        if ids and self._collection:
             self.index(ids=ids, documents=documents, metadatas=metadatas)
             logger.info(f"FAQ 索引完成: {len(ids)} 条")
 

@@ -204,7 +204,7 @@ async def delete_document(filename: str, _auth: str = Depends(require_admin)):
 async def list_reviews(_auth: str = Depends(require_admin)):
     """获取所有等待人工审核的案例"""
     from src.api.review_store import get_pending_reviews
-    reviews = get_pending_reviews()
+    reviews = await get_pending_reviews()
     return {"total": len(reviews), "reviews": reviews}
 
 
@@ -215,7 +215,7 @@ async def list_reviews(_auth: str = Depends(require_admin)):
 async def get_review(thread_id: str, _auth: str = Depends(require_admin)):
     """获取单个审核案例"""
     from src.api.review_store import get_review
-    review = get_review(thread_id)
+    review = await get_review(thread_id)
     if review is None:
         raise HTTPException(status_code=404, detail=f"未找到审核案例: {thread_id}")
     return review
@@ -227,17 +227,21 @@ async def get_review(thread_id: str, _auth: str = Depends(require_admin)):
 )
 async def approve_review(thread_id: str, note: str = "", _auth: str = Depends(require_admin)):
     """
-    批准人工审核案例，图继续执行
+    批准人工审核案例
 
     批准后 Supervisor 的决策生效（退款/补偿等）。
     如果图仍在内存中（同一进程），自动恢复执行。
     """
-    from src.api.review_store import approve_review, get_review
-    review = approve_review(thread_id, note)
+    from src.api.review_store import approve_review
+    review = await approve_review(thread_id, note)
     if review is None:
         raise HTTPException(status_code=404, detail=f"未找到待审核案例: {thread_id}")
 
-    # 尝试恢复图执行
+    # 转人工审核：图未暂停，无需恢复执行
+    if review.get("review_type") == "human_handoff":
+        return {"status": "approved", "thread_id": thread_id}
+
+    # 尝试恢复图执行（supervisor 高风险决策的 interrupt 挂起）
     try:
         from src.api.deps import get_graph
         graph = await get_graph()
@@ -265,12 +269,16 @@ async def reject_review(thread_id: str, reason: str = "", _auth: str = Depends(r
 
     驳回后 Supervisor 决策被覆盖，回复客户"需要进一步核实"。
     """
-    from src.api.review_store import reject_review, get_review
-    review = reject_review(thread_id, reason)
+    from src.api.review_store import reject_review
+    review = await reject_review(thread_id, reason)
     if review is None:
         raise HTTPException(status_code=404, detail=f"未找到待审核案例: {thread_id}")
 
-    # 尝试恢复图执行
+    # 转人工审核：图未暂停，无需恢复执行
+    if review.get("review_type") == "human_handoff":
+        return {"status": "rejected", "thread_id": thread_id, "reason": reason}
+
+    # 尝试恢复图执行（supervisor 高风险决策的 interrupt 挂起）
     try:
         from src.api.deps import get_graph
         graph = await get_graph()

@@ -53,8 +53,10 @@ class BillingAgent(BaseAgent):
     """账单/账户 Agent"""
 
     def __init__(self):
+        from src.api.model_registry import get_model
+
         super().__init__(
-            model=config.MODEL_SPECIALIST,
+            model=get_model("billing"),
             temperature=0.1,  # 账单需要精确
         )
 

@@ -53,6 +53,13 @@ logger = logging.getLogger(__name__)
 _agents: dict[str, object] = {}
 
 
+def reset_agents():
+    """清空 Agent 单例缓存，使模型配置改动在下次请求生效"""
+    global _agents
+    _agents = {}
+    logger.info("Agent 单例缓存已重置")
+
+
 def _get_agent(name: str):
     """懒加载 Agent 单例"""
     if name not in _agents:
@@ -437,7 +444,7 @@ async def supervisor_node(state: dict) -> dict:
             }
             # 加入审核队列
             thread_id = state.get("session_id", "unknown")
-            add_review(thread_id, review_context)
+            await add_review(thread_id, review_context)
             # 挂起执行
             human_decision = interrupt(review_context)
             # 人工审核返回后继续: {"approved": true/false, "note": "..."}
@@ -493,14 +500,28 @@ async def supervisor_node(state: dict) -> dict:
 async def human_handoff_node(state: dict) -> dict:
     """
     人工转接节点: 标记对话转人工处理
-    """
-    reason = state.get("escalation_reason", "Agent 无法解决")
-    logger.warning(f"[HumanHandoff] 转人工: {reason[:80]}")
 
-    handoff_msg = (
-        f"您的请求已转接给人工客服。转接原因：{reason}\n"
-        f"请稍候，我们的客服人员将尽快为您服务。"
-    )
+    转人工前先加入人工审核队列（review_type=human_handoff）。
+    图不暂停，客户立即收到"申请已提交"反馈，管理员从审核队列批准/驳回。
+    """
+    reason = state.get("escalation_reason", "客户要求转人工")
+    session_id = state.get("session_id", "unknown")
+    logger.warning(f"[HumanHandoff] 转人工申请: {reason[:80]}")
+
+    # 加入人工审核队列（DB 持久化，内存兜底）
+    try:
+        from src.api.review_store import add_review
+
+        await add_review(session_id, {
+            "session_id": session_id,
+            "review_type": "human_handoff",
+            "message": f"客户要求转人工: {reason}",
+            "review_items": ["客户主动要求人工客服", f"原因: {reason[:200]}"],
+        })
+    except Exception as e:
+        logger.error(f"[HumanHandoff] 审核入队失败: {e}")
+
+    handoff_msg = "您的转人工申请已提交，请稍候，客服主管会尽快处理。"
 
     assistant_msg = Message(
         role=MessageRole.ASSISTANT,
@@ -516,7 +537,7 @@ async def human_handoff_node(state: dict) -> dict:
         "active_agent": "human_handoff",
         "resolution": Resolution(
             resolution_type=ResolutionType.HUMAN_RESOLVED,
-            summary=f"转人工: {reason}",
+            summary=f"转人工申请待审核: {reason}",
             agent_name="human_handoff",
         ).model_dump(),
     }

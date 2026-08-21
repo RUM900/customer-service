@@ -90,8 +90,10 @@ class TriageAgent(BaseAgent):
     """
 
     def __init__(self):
+        from src.api.model_registry import get_model
+
         super().__init__(
-            model=config.MODEL_TRIAGE,
+            model=get_model("triage"),
             temperature=0.1,  # 分诊需要稳定性
         )
 

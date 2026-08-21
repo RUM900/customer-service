@@ -164,18 +164,17 @@ class IngestionPipeline:
         """
         从索引中移除文档的所有块
 
-        注意: ChromaDB 不支持按 source 删除，这里做全量重建。
-        简单方案: 删除所有块后重新索引剩余文档。
+        直接从 ChromaDB 按 source 元数据删除（不依赖进程内 _indexed_docs，
+        这样重启后管理员仍可删除已上传文档）。
         """
-        if filename not in self._indexed_docs:
-            return False
-
-        del self._indexed_docs[filename]
+        removed_from_index = filename in self._indexed_docs
+        if removed_from_index:
+            del self._indexed_docs[filename]
 
         # 从 ChromaDB 中删除该文档的块
+        removed_chunks = False
         try:
             if self.vector_store and self.vector_store._collection:
-                # 通过 metadata 过滤获取该文档的所有 chunk
                 existing = self.vector_store._collection.get(
                     where={"source": filename}
                 )
@@ -187,12 +186,11 @@ class IngestionPipeline:
                         batch = ids_to_delete[i:i + batch_size]
                         self.vector_store._collection.delete(ids=batch)
                     logger.info(f"已从索引移除: {filename} ({len(ids_to_delete)} 个块)")
-                else:
-                    logger.info(f"未找到可删除的块: {filename}")
+                    removed_chunks = True
         except Exception as e:
             logger.warning(f"ChromaDB 删除失败: {e}")
 
-        return True
+        return removed_from_index or removed_chunks
 
     @property
     def document_count(self) -> int:
@@ -227,6 +225,7 @@ class IngestionPipeline:
                 "source": chunk.source,
                 "chunk_index": chunk.chunk_index,
                 "text": chunk.text[:1000],  # 元数据存前 1000 字符
+                "kind": "document",
             })
 
         self.vector_store.index(ids=ids, documents=documents, metadatas=metadatas)
