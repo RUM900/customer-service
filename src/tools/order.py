@@ -79,7 +79,8 @@ class OrderLookupTool(BaseTool):
 
     name = "order_lookup"
     description = (
-        "查询订单信息：根据订单 ID 或客户 ID 获取订单详情。"
+        "查询订单信息：提供 order_id 查询单个订单，或提供 customer_id 查询该客户全部订单。"
+        "客户查询自己的订单时用 customer_id（无需客户提供订单号）。"
         "返回订单状态、商品列表、金额、物流信息等。"
     )
 

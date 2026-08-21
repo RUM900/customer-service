@@ -89,6 +89,8 @@ def _fmt_customer_context(ctx: dict) -> str:
     if not ctx:
         return ""
     parts = []
+    if ctx.get("customer_id"):
+        parts.append(f"客户ID: {ctx['customer_id']}")
     if ctx.get("name"):
         parts.append(f"姓名: {ctx['name']}")
     if ctx.get("tier"):
@@ -945,19 +947,22 @@ async def _execute_tool_with_auto_args(tool, tool_name: str, user_message: str, 
     if tool_name == "crm_lookup":
         customer_id = state.get("customer_id", "")
         if not customer_id:
-            match = re.search(r'cust_\w+', user_message)
+            match = re.search(r'cust_[A-Za-z0-9_]+', user_message)
             customer_id = match.group(0) if match else ""
         if not customer_id:
             return {"error": "无法识别客户 ID，请提供有效的客户标识", "found": False}
         return await tool.execute(customer_id=customer_id)
 
-    # 订单查询 — 提取订单 ID
+    # 订单查询 — 优先按订单号，其次回落当前客户（查全部订单）
     elif tool_name == "order_lookup":
-        match = re.search(r'ord_\w+', user_message)
+        match = re.search(r'ord_[A-Za-z0-9_]+', user_message)
         order_id = match.group(0) if match else ""
-        if not order_id:
-            return {"error": "无法识别订单 ID，请提供有效的订单号", "found": False}
-        return await tool.execute(order_id=order_id)
+        if order_id:
+            return await tool.execute(order_id=order_id)
+        customer_id = state.get("customer_id", "")
+        if customer_id:
+            return await tool.execute(customer_id=customer_id)
+        return {"error": "无法识别订单，请提供订单号或绑定客户", "found": False}
 
     # 知识库搜索 — 直接用客户消息
     elif tool_name == "knowledge_search":
@@ -971,6 +976,17 @@ async def _execute_tool_with_auto_args(tool, tool_name: str, user_message: str, 
             subject=user_message[:100],
             description=user_message[:500],
         )
+
+    # 工单查询 — 优先按工单号，其次回落当前客户
+    elif tool_name == "ticket_query":
+        match = re.search(r'ticket_[A-Za-z0-9_]+', user_message)
+        ticket_id = match.group(0) if match else ""
+        if ticket_id:
+            return await tool.execute(ticket_id=ticket_id)
+        customer_id = state.get("customer_id", "")
+        if customer_id:
+            return await tool.execute(customer_id=customer_id)
+        return {"error": "无法识别工单，请提供工单号或绑定客户", "found": False}
 
     # 默认
     else:
