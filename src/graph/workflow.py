@@ -136,15 +136,56 @@ async def triage_node(state: dict) -> dict:
 
 async def faq_answer_node(state: dict) -> dict:
     """
-    FAQ 回答节点: 对简单 FAQ 问题直接给出回答
-
-    使用 Triage Agent 的 summary + LLM 直接回复。
+    FAQ 回答节点: 先查知识库（向量检索），高置信直接返回标准答案；
+    低置信 / 未命中 / 检索失败则用 LLM 现答。
     """
     user_message = state.get("user_message", "")
     triage = state.get("triage_result") or {}
 
-    logger.info(f"[FAQ] 直接回答: '{user_message[:60]}...'")
+    logger.info(f"[FAQ] 回答: '{user_message[:60]}...'")
 
+    # --- 1. 先查知识库（向量检索），高置信直接返回标准答案 ---
+    try:
+        from src.api.deps import get_tool_registry
+
+        kb = get_tool_registry().get_tool("knowledge_search")
+        if kb is not None:
+            search = await kb.execute(query=user_message, top_k=1)
+            top = search["results"][0] if search.get("results") else None
+            if (
+                top
+                and search.get("method") == "vector"
+                and search.get("top_score", 0.0) >= config.FAQ_CONFIDENCE_THRESHOLD
+            ):
+                reply = top["answer"]
+                logger.info(
+                    f"[FAQ] 知识库命中: {top.get('faq_id')} "
+                    f"score={search['top_score']:.3f}"
+                )
+                assistant_msg = Message(
+                    role=MessageRole.ASSISTANT,
+                    content=reply,
+                    agent_name="faq_answer",
+                )
+                return {
+                    "messages": [assistant_msg.model_dump()],
+                    "final_reply": reply,
+                    "status": ConversationStatus.RESOLVED.value,
+                    "active_agent": "faq_answer",
+                    "resolution": Resolution(
+                        resolution_type=ResolutionType.FAQ_AUTO,
+                        summary=f"FAQ 标准答案: {top.get('question', '')}",
+                        agent_name="faq_answer",
+                        customer_satisfied=None,
+                    ).model_dump(),
+                }
+            logger.info(
+                f"[FAQ] 知识库未命中(score={search.get('top_score', 0):.3f})，回落 LLM"
+            )
+    except Exception as e:
+        logger.warning(f"[FAQ] 知识库检索失败，回落 LLM: {e}")
+
+    # --- 2. 低置信/未命中 → LLM 现答 ---
     try:
         agent = _get_agent("triage")
 

@@ -68,6 +68,8 @@ class VectorStore:
             )
             self._collection = self._client.get_or_create_collection(
                 name=self._collection_name,
+                # 用余弦距离，保证 score=1/(1+distance) 的分数有区分度
+                metadata={"hnsw:space": "cosine"},
             )
             self._ready = True
             logger.info(
