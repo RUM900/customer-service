@@ -228,30 +228,3 @@ async def require_user(request: Request) -> str:
     if not config.AUTH_ENABLED:
         return "auth_disabled"
     return await require_agent(request)
-
-
-# ============================================================
-# 可选认证（不强制，但记录身份）
-# ============================================================
-
-async def optional_auth(request: Request) -> Optional[str]:
-    """
-    可选认证 —— 不强制要求 API Key，但如果提供则验证并记录
-
-    用于希望公开访问但追踪调用来源的场景。
-    """
-    if not config.AUTH_ENABLED:
-        return None
-
-    provided_key = _extract_api_key(request)
-    if not provided_key:
-        return None
-
-    if not config.API_KEY:
-        return None
-
-    if provided_key == config.API_KEY:
-        return "agent_authenticated"
-
-    logger.warning(f"可选认证: 无效的 API Key: {provided_key[:8]}...")
-    return None

@@ -7,7 +7,6 @@ from src.models.conversation import (
     Tier,
     ResolutionType,
     Message,
-    Conversation,
     Session,
     Resolution,
     AgentError,
@@ -35,7 +34,7 @@ from src.models.knowledge import (
 
 __all__ = [
     "MessageRole", "ConversationStatus", "Tier", "ResolutionType",
-    "Message", "Conversation", "Session", "Resolution", "AgentError",
+    "Message", "Session", "Resolution", "AgentError",
     "IntentType", "Sentiment", "Urgency", "TriageResult", "RoutingDecision",
     "CustomerTier", "OrderStatus", "TicketPriority", "TicketStatus",
     "Customer", "Order", "Ticket",

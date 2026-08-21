@@ -70,16 +70,6 @@ class Message(BaseModel):
     metadata: dict = {}                  # 扩展元数据
 
 
-class Conversation(BaseModel):
-    """完整对话 — 包含所有消息"""
-    conversation_id: str = Field(default_factory=lambda: f"conv_{uuid4().hex[:12]}")
-    session_id: str = ""
-    messages: list[Message] = []
-    status: ConversationStatus = ConversationStatus.ACTIVE
-    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
-    updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
-
-
 # ============================================================
 # 会话
 # ============================================================

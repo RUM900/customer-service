@@ -27,7 +27,6 @@ class BaseAgent:
     - call_structured(): LLM 结构化输出（JSON → Pydantic，自动重试）
     - call_chat(): LLM 普通文本对话
     - call_with_history(): 带历史的 LLM 对话
-    - call_with_tools(): 带工具定义的 LLM 对话
 
     子类只需:
     1. 设置 system_prompt（类属性或构造函数传入）
@@ -153,45 +152,4 @@ class BaseAgent:
     ) -> str:
         """带对话历史的 LLM 调用"""
         messages = self._build_messages(system_prompt, user_prompt, history)
-        return await self.provider.chat(messages=messages)
-
-    # ----------------------------------------------------------
-    # 工具调用（Function Calling）
-    # ----------------------------------------------------------
-
-    async def call_with_tools(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        tools: list[dict],
-        history: Optional[list[dict]] = None,
-    ) -> str:
-        """
-        带工具定义的 LLM 调用（Function Calling）
-
-        注意：当前实现将工具 Schema 注入 system prompt，
-        让 LLM 自行判断并输出工具调用指令。
-        生产环境应使用 Provider 原生的 Function Calling API。
-
-        Args:
-            system_prompt: 系统提示
-            user_prompt: 用户输入
-            tools: 工具列表（JSON Schema 格式）
-            history: 历史消息
-
-        Returns:
-            LLM 输出文本（可能包含工具调用指令）
-        """
-        tools_desc = "\n".join(
-            f"- **{t['name']}**: {t.get('description', '')}"
-            for t in tools
-        )
-
-        enhanced_system = (
-            f"{system_prompt}\n\n"
-            f"## 可用工具\n{tools_desc}\n\n"
-            f"如需使用工具，请在回复中明确指出工具名称和参数。"
-        )
-
-        messages = self._build_messages(enhanced_system, user_prompt, history)
         return await self.provider.chat(messages=messages)

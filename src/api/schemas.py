@@ -100,10 +100,3 @@ class HealthResponse(BaseModel):
     version: str = "0.1.0"
     llm_provider: str = ""
     database: str = "disconnected"
-
-
-class ErrorResponse(BaseModel):
-    """错误响应"""
-    error: str
-    detail: Optional[str] = None
-    session_id: Optional[str] = None

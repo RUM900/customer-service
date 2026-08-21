@@ -59,8 +59,6 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-v1")
 DEFAULT_TEMPERATURE = float(os.getenv("DEFAULT_TEMPERATURE", "0.1"))
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", "4096"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
-RETRY_MIN_WAIT = int(os.getenv("RETRY_MIN_WAIT", "2"))
-RETRY_MAX_WAIT = int(os.getenv("RETRY_MAX_WAIT", "30"))
 
 # ============================================================
 # PostgreSQL 配置
@@ -109,9 +107,6 @@ FAQ_CONFIDENCE_THRESHOLD = float(os.getenv("FAQ_CONFIDENCE_THRESHOLD", "0.75"))
 # 对话历史保留轮数
 MAX_HISTORY_TURNS = int(os.getenv("MAX_HISTORY_TURNS", "20"))
 
-# 会话超时（秒）
-SESSION_TIMEOUT_SECONDS = int(os.getenv("SESSION_TIMEOUT_SECONDS", "1800"))
-
 # ============================================================
 # 认证配置
 # ============================================================
@@ -146,7 +141,6 @@ MODEL_VALIDATION_ENABLED = os.getenv("MODEL_VALIDATION_ENABLED", "true").lower()
 
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", "8000"))
-API_WORKERS = int(os.getenv("API_WORKERS", "4"))
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 
