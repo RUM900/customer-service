@@ -10,7 +10,7 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from pydantic import BaseModel, Field
 
 from src.api.deps import get_knowledge_store

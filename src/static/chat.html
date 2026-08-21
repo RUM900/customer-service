@@ -168,33 +168,69 @@ async function sendMsg() {
   renderSessions();
   renderMessages();
 
-  try {
-    var res = await fetch('/chat/' + currentSession, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: msg })
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    var data = await res.json();
+  // 占位气泡，随 SSE 事件实时更新
+  var agentMsg = { role: 'agent', content: '正在分析...', meta: {} };
+  sessions[currentSession].messages.push(agentMsg);
+  renderMessages();
 
-    var meta = {};
-    if (data.intent) meta.intent = data.intent;
-    if (data.sentiment) meta.sentiment = data.sentiment;
-    if (data.agent_name) meta.agent = data.agent_name;
-    if (data.status === 'resolved') meta.status = 'resolved';
-    if (data.status === 'handoff') meta.status = 'handoff';
+  var done = false;
+  var progressLabel = {
+    triage: '分诊分析中...',
+    faq_answer: '智能助手回答中...',
+    technical: '技术专员处理中...',
+    billing: '账务专员处理中...',
+    product: '产品专员处理中...',
+    complaint: '投诉专员处理中...',
+    supervisor: '主管审核中...',
+    tools: '查询数据中...',
+    human_handoff: '转接人工客服...'
+  };
 
-    sessions[currentSession].messages.push({ role: 'agent', content: data.reply || '(空回复)', meta: meta });
+  var es = new EventSource('/chat/' + currentSession + '/stream?message=' + encodeURIComponent(msg));
+
+  es.addEventListener('agent_update', function(e) {
+    if (done) return;
+    var data = JSON.parse(e.data);
+    var node = Object.keys(data)[0];
+    var nodeData = data[node] || {};
+    if (nodeData.final_reply) {
+      agentMsg.content = nodeData.final_reply;
+      agentMsg.meta.agent = nodeData.active_agent || node;
+    } else {
+      agentMsg.content = progressLabel[node] || '处理中...';
+    }
+    renderMessages();
+  });
+
+  es.addEventListener('done', function(e) {
+    if (done) return;
+    done = true;
+    es.close();
+    var data = JSON.parse(e.data);
+    if (data.reply) agentMsg.content = data.reply;
+    agentMsg.meta = {};
+    if (data.intent) agentMsg.meta.intent = data.intent;
+    if (data.sentiment) agentMsg.meta.sentiment = data.sentiment;
+    if (data.agent_name) agentMsg.meta.agent = data.agent_name;
+    if (data.conversation_status === 'resolved') agentMsg.meta.status = 'resolved';
+    if (data.conversation_status === 'handoff') agentMsg.meta.status = 'handoff';
     sessions[currentSession].preview = (data.reply || '').slice(0, 30);
     renderSessions();
     renderMessages();
-  } catch (e) {
-    sessions[currentSession].messages.push({ role: 'agent', content: '错误: ' + e.message, meta: {} });
+    btn.disabled = false;
+    btn.innerHTML = '发送';
+  });
+
+  es.addEventListener('error', function(e) {
+    // EventSource 在服务端关闭连接后也会触发 error，需用 done 标记区分
+    if (done) return;
+    done = true;
+    es.close();
+    agentMsg.content = '连接中断，请重试';
     renderMessages();
-    showError('发送失败: ' + e.message);
-  }
-  btn.disabled = false;
-  btn.innerHTML = '发送';
+    btn.disabled = false;
+    btn.innerHTML = '发送';
+  });
 }
 </script>
 </body>

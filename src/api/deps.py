@@ -13,6 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.memory.database import get_db as _get_db
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 # ============================================================
 # 数据库
 # ============================================================
@@ -108,9 +112,17 @@ def get_knowledge_store():
 
         _knowledge_store = VectorStore()
 
+        # 显式初始化 ChromaDB（VectorStore 采用懒加载，需手动触发）
+        if not _knowledge_store.ensure_ready():
+            logger.warning("ChromaDB 初始化失败，向量检索不可用，将使用内存关键词检索")
+            return _knowledge_store
+
         # 如果集合为空，加载默认 FAQ
         if _knowledge_store.count() == 0:
-            faqs = load_default_faqs()
-            _knowledge_store.index_faqs(faqs)
+            try:
+                faqs = load_default_faqs()
+                _knowledge_store.index_faqs(faqs)
+            except Exception as e:
+                logger.warning(f"FAQ 向量索引失败: {e}")
 
     return _knowledge_store

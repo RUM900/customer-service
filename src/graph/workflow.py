@@ -133,7 +133,7 @@ async def faq_answer_node(state: dict) -> dict:
     使用 Triage Agent 的 summary + LLM 直接回复。
     """
     user_message = state.get("user_message", "")
-    triage = state.get("triage_result", {})
+    triage = state.get("triage_result") or {}
 
     logger.info(f"[FAQ] 直接回答: '{user_message[:60]}...'")
 
@@ -197,7 +197,7 @@ async def specialist_node(state: dict, agent_name: str) -> dict:
     如果有上一轮工具执行结果，会注入到 prompt 中供 Agent 参考。
     """
     user_message = state.get("user_message", "")
-    triage = state.get("triage_result", {})
+    triage = state.get("triage_result") or {}
     triage_summary = triage.get("summary", "")
     tool_results = state.get("tool_results", [])
     tool_round = state.get("tool_round", 0)

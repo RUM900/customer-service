@@ -26,6 +26,7 @@ from src.api.schemas import (
 )
 from src.api.storage import get_storage
 from src.api.auth import require_agent
+from src.api.deps import get_graph
 from src.api.security import sanitize_user_input, detect_prompt_injection
 from src.utils.context import prepare_context
 from src.models.conversation import (
@@ -145,17 +146,25 @@ async def chat_stream(
     """SSE 流式端点 — 实时推送 Agent 工作进度"""
     from src.graph.workflow import run_customer_service_stream
 
+    # 与 POST /chat 一致：输入消毒
+    clean_message = sanitize_user_input(message)
+
     async def event_generator():
         try:
             store = get_storage()
             raw_history = await store.get_history(session_id, limit=config.MAX_HISTORY_TURNS * 2)
-            # 不做 token 截断，让各 Agent 自行管理
             history = raw_history
 
+            # 保存用户消息（与 POST /chat 保持一致）
+            user_msg = Message(role=MessageRole.USER, content=clean_message)
+            await store.save_message(session_id, user_msg)
+
             graph = await get_graph()
+            thread_config = {"configurable": {"thread_id": session_id}}
+
             async for event in run_customer_service_stream(
                 session_id=session_id,
-                user_message=message,
+                user_message=clean_message,
                 customer_id=customer_id or "",
                 history_messages=history,
                 graph=graph,
@@ -165,16 +174,52 @@ async def chat_stream(
                     "data": json.dumps(event, ensure_ascii=False, default=str),
                 }
 
+            # 工作流结束后，从 checkpointer 获取最终状态用于持久化
+            final_state = {}
+            try:
+                snapshot = await graph.aget_state(thread_config)
+                if snapshot is not None and snapshot.values:
+                    final_state = snapshot.values
+            except Exception:
+                pass
+
+            reply = final_state.get("final_reply", "") or ""
+            status = final_state.get("status", ConversationStatus.ACTIVE.value)
+            agent_name = final_state.get("active_agent", "") or ""
+            triage = final_state.get("triage_result") or {}
+
+            # 保存 Agent 回复并更新会话（与 POST /chat 保持一致）
+            if reply:
+                assistant_msg = Message(
+                    role=MessageRole.ASSISTANT,
+                    content=reply,
+                    agent_name=agent_name,
+                )
+                await store.save_message(session_id, assistant_msg)
+            await store.update_session(
+                session_id,
+                status=status,
+                active_agent=agent_name,
+            )
+
             yield {
                 "event": "done",
-                "data": json.dumps({"status": "completed", "session_id": session_id}),
+                "data": json.dumps({
+                    "status": "completed",
+                    "session_id": session_id,
+                    "reply": reply,
+                    "agent_name": agent_name,
+                    "intent": triage.get("primary_intent"),
+                    "sentiment": triage.get("sentiment"),
+                    "conversation_status": status,
+                }, ensure_ascii=False, default=str),
             }
 
         except Exception as e:
             logger.exception(f"SSE 流异常: {e}")
             yield {
                 "event": "error",
-                "data": json.dumps({"error": str(e)}),
+                "data": json.dumps({"error": str(e)}, ensure_ascii=False),
             }
 
     return EventSourceResponse(event_generator())

@@ -71,6 +71,14 @@ class VectorStore:
             self._ready = False
             return False
 
+    def ensure_ready(self) -> bool:
+        """
+        确保 ChromaDB 已初始化（幂等）
+
+        返回 True 表示就绪。外部在需要真正使用向量检索前调用。
+        """
+        return self._init_chroma()
+
     # ----------------------------------------------------------
     # 索引
     # ----------------------------------------------------------
