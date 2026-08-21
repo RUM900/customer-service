@@ -112,13 +112,6 @@ MAX_HISTORY_TURNS = int(os.getenv("MAX_HISTORY_TURNS", "20"))
 # 会话超时（秒）
 SESSION_TIMEOUT_SECONDS = int(os.getenv("SESSION_TIMEOUT_SECONDS", "1800"))
 
-# Context 窗口管理
-MAX_CONTEXT_TOKENS = int(os.getenv("MAX_CONTEXT_TOKENS", "4000"))
-# 各 Agent 的 token 预算（可单独覆盖）
-CONTEXT_BUDGET_TRIAGE = int(os.getenv("CONTEXT_BUDGET_TRIAGE", "3500"))
-CONTEXT_BUDGET_SPECIALIST = int(os.getenv("CONTEXT_BUDGET_SPECIALIST", "4000"))
-CONTEXT_BUDGET_SUPERVISOR = int(os.getenv("CONTEXT_BUDGET_SUPERVISOR", "5000"))
-
 # ============================================================
 # 认证配置
 # ============================================================

@@ -28,7 +28,6 @@ from src.api.storage import get_storage
 from src.api.auth import require_agent
 from src.api.deps import get_graph
 from src.api.security import sanitize_user_input, detect_prompt_injection
-from src.utils.context import prepare_context
 from src.models.conversation import (
     Message, MessageRole, ConversationStatus,
 )
@@ -65,6 +64,13 @@ async def chat(session_id: str, req: ChatRequest, _auth: str = Depends(require_a
         raw_history = await store.get_history(session_id, limit=config.MAX_HISTORY_TURNS * 2)
         history = raw_history
 
+        # 客户 ID：优先请求体，回落会话绑定
+        effective_customer_id = req.customer_id or ""
+        if not effective_customer_id:
+            session = await store.get_session(session_id)
+            if session:
+                effective_customer_id = session.customer_id or ""
+
         # 保存用户消息
         user_msg = Message(role=MessageRole.USER, content=clean_message)
         await store.save_message(session_id, user_msg)
@@ -73,7 +79,7 @@ async def chat(session_id: str, req: ChatRequest, _auth: str = Depends(require_a
         final_state = await run_customer_service(
             session_id=session_id,
             user_message=clean_message,
-            customer_id=req.customer_id or "",
+            customer_id=effective_customer_id,
             history_messages=history,
         )
 
@@ -164,10 +170,17 @@ async def chat_stream(
             thread_id = _new_thread_id(session_id)
             thread_config = {"configurable": {"thread_id": thread_id}}
 
+            # 客户 ID：优先 query 参数，回落会话绑定
+            effective_customer_id = customer_id or ""
+            if not effective_customer_id:
+                session = await store.get_session(session_id)
+                if session:
+                    effective_customer_id = session.customer_id or ""
+
             async for event in run_customer_service_stream(
                 session_id=session_id,
                 user_message=clean_message,
-                customer_id=customer_id or "",
+                customer_id=effective_customer_id,
                 history_messages=history,
                 graph=graph,
                 thread_id=thread_id,

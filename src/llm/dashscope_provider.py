@@ -11,7 +11,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
 from src.llm.base import LLMProvider
-from src.llm.format_utils import inject_format_guide
+from src.llm.format_utils import inject_format_guide, extract_json
 from src.llm.retry import llm_retry
 import config
 
@@ -80,7 +80,7 @@ class DashScopeProvider(LLMProvider):
 
             # Step 1: 解析 JSON
             try:
-                data = json.loads(raw)
+                data = json.loads(extract_json(raw))
             except json.JSONDecodeError:
                 msgs.append({"role": "assistant", "content": raw})
                 msgs.append({

@@ -6,6 +6,23 @@ LLM 格式工具 — 避免循环导入
 from typing import Any
 
 
+def extract_json(raw: str) -> str:
+    """从 LLM 输出中提取 JSON 文本（去除 markdown 代码围栏与多余空白）"""
+    if not raw:
+        return raw
+    text = raw.strip()
+    if text.startswith("```"):
+        # 去掉 ```json ... ``` 或 ``` ... ```
+        if "\n" in text:
+            text = text.split("\n", 1)[-1]
+        else:
+            text = text[3:]
+        if text.rstrip().endswith("```"):
+            text = text.rstrip()[:-3]
+        text = text.strip()
+    return text
+
+
 def inject_format_guide(messages: list[dict], schema: dict) -> None:
     """
     将 JSON Schema 格式指南注入 system message

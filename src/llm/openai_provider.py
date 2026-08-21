@@ -13,7 +13,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
 from src.llm.base import LLMProvider
-from src.llm.format_utils import inject_format_guide
+from src.llm.format_utils import inject_format_guide, extract_json
 from src.llm.retry import llm_retry
 import config
 
@@ -91,7 +91,7 @@ class OpenAIProvider(LLMProvider):
             raw = response.choices[0].message.content or ""
 
             try:
-                data = json.loads(raw)
+                data = json.loads(extract_json(raw))
             except json.JSONDecodeError:
                 msgs.append({"role": "assistant", "content": raw})
                 msgs.append({

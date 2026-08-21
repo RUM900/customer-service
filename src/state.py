@@ -18,6 +18,12 @@ class CustomerServiceState(TypedDict, total=False):
     user_message: str
     thread_id: str  # 每轮对话的独立 checkpointer thread（避免跨轮消息重复累积）
 
+    # === 客户上下文（每轮自动从 CRM 加载） ===
+    customer_context: Optional[dict]
+
+    # === 会话记忆（超长对话由 memory_node 生成的 LLM 摘要） ===
+    memory_summary: str
+
     # === 消息（operator.add 累积） ===
     messages: Annotated[list[dict], operator.add]
 
@@ -80,6 +86,8 @@ def create_initial_state(
         "customer_id": customer_id,
         "messages": [],
         "user_message": "",
+        "customer_context": None,
+        "memory_summary": "",
         "triage_result": None,
         "routing_decision": None,
         "specialist_response": None,

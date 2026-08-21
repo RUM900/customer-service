@@ -81,6 +81,90 @@ def _get_agent(name: str):
 
 
 # ============================================================
+# 客户上下文
+# ============================================================
+
+def _fmt_customer_context(ctx: dict) -> str:
+    """客户画像 → 提示文本"""
+    if not ctx:
+        return ""
+    parts = []
+    if ctx.get("name"):
+        parts.append(f"姓名: {ctx['name']}")
+    if ctx.get("tier"):
+        parts.append(f"等级: {ctx['tier']}")
+    if ctx.get("total_spent"):
+        parts.append(f"累计消费: ¥{ctx['total_spent']}")
+    if ctx.get("total_orders"):
+        parts.append(f"历史订单: {ctx['total_orders']} 单")
+    if ctx.get("tags"):
+        parts.append(f"标签: {', '.join(ctx['tags'])}")
+    return "；".join(parts)
+
+
+async def _load_customer_context(customer_id: str) -> dict:
+    """从 CRM 加载客户画像（当前为 mock 数据）"""
+    if not customer_id:
+        return {}
+    try:
+        from src.tools.crm import CRMLookupTool
+
+        result = await CRMLookupTool().execute(customer_id=customer_id)
+        if result.get("found"):
+            return result.get("customer", {})
+    except Exception as e:
+        logger.warning(f"客户上下文加载失败: {e}")
+    return {}
+
+
+# ============================================================
+# 会话记忆（LLM 摘要）
+# ============================================================
+
+# 超过保留窗口（最近 N 条消息）的旧消息由 memory_node 摘要化
+GLOBAL_KEEP_RECENT = 10
+
+
+async def _summarize_messages(old_messages: list[dict], existing_summary: str = "") -> str:
+    """用 LLM 将旧对话压缩为会话摘要（合并已有摘要）"""
+    agent = _get_agent("triage")
+    history = _messages_to_history(old_messages)
+    history_text = "\n".join(f"[{m['role']}]: {m['content']}" for m in history)
+
+    user_prompt = (
+        "请将以下客服对话压缩为简洁的中文要点摘要，保留关键事实："
+        "客户身份/等级、问题、订单号、诉求、已承诺事项、解决状态。"
+    )
+    if existing_summary:
+        user_prompt += f"\n\n已有摘要：\n{existing_summary}\n\n请合并并输出更新后的完整摘要。"
+    user_prompt += f"\n\n对话内容：\n{history_text}"
+
+    return await agent.call_chat(
+        system_prompt="你是会话记忆助手。只输出摘要本身，不要多余解释或前缀。",
+        user_prompt=user_prompt,
+    )
+
+
+async def memory_node(state: dict) -> dict:
+    """会话记忆节点：当历史过长时，把超出保留窗口的旧消息压缩为摘要记忆"""
+    messages = state.get("messages", [])
+    existing = state.get("memory_summary", "") or ""
+
+    if len(messages) <= GLOBAL_KEEP_RECENT:
+        return {"memory_summary": existing}
+
+    # 只摘要保留窗口之外、最近最多 20 条的旧消息，控制成本
+    old = messages[:-GLOBAL_KEEP_RECENT][-20:]
+    try:
+        summary = await _summarize_messages(old, existing)
+        logger.info(f"[Memory] 摘要生成: {len(old)} 条旧消息 → '{summary[:50]}...'")
+        return {"memory_summary": summary}
+    except Exception as e:
+        logger.warning(f"[Memory] 摘要生成失败: {e}")
+        return {"memory_summary": existing}
+
+
+# ============================================================
 # 图节点
 # ============================================================
 
@@ -94,6 +178,11 @@ async def triage_node(state: dict) -> dict:
     user_message = state.get("user_message", "")
     logger.info(f"[Triage] 分析消息: '{user_message[:80]}...'")
 
+    # 每轮自动加载客户上下文，供后续 specialist/faq 使用
+    customer_context = state.get("customer_context") or {}
+    if not customer_context:
+        customer_context = await _load_customer_context(state.get("customer_id", ""))
+
     try:
         agent = _get_agent("triage")
 
@@ -101,7 +190,7 @@ async def triage_node(state: dict) -> dict:
         raw_history = state.get("messages", [])
         context = prepare_context(
             raw_history, "triage",
-            user_message=user_message,
+            memory_summary=state.get("memory_summary", ""),
         )
         history = _messages_to_history(context)
 
@@ -119,6 +208,7 @@ async def triage_node(state: dict) -> dict:
             "active_agent": "triage",
             "current_tier": Tier.TRIAGE.value,
             "status": ConversationStatus.ACTIVE.value,
+            "customer_context": customer_context,
         }
 
     except Exception as e:
@@ -198,12 +288,21 @@ async def faq_answer_node(state: dict) -> dict:
         # 构建带历史的上下文
         raw_history = state.get("messages", [])
         history = _messages_to_history(
-            prepare_context(raw_history, "faq_answer", system_prompt=faq_prompt, user_message=user_message)
+            prepare_context(
+                raw_history, "faq_answer",
+                memory_summary=state.get("memory_summary", ""),
+            )
         )
+
+        # 注入客户上下文
+        user_prompt = user_message
+        customer_ctx = _fmt_customer_context(state.get("customer_context") or {})
+        if customer_ctx:
+            user_prompt = f"[客户信息] {customer_ctx}\n\n{user_prompt}"
 
         reply = await agent.call_with_history(
             system_prompt=faq_prompt,
-            user_prompt=user_message,
+            user_prompt=user_prompt,
             history=history,
         )
 
@@ -285,11 +384,16 @@ async def specialist_node(state: dict, agent_name: str) -> dict:
                 f"工具执行结果：\n{results_text}"
             )
 
+        # 注入客户上下文，支持个性化回复
+        customer_ctx = _fmt_customer_context(state.get("customer_context") or {})
+        if customer_ctx:
+            enhanced_message = f"[客户信息] {customer_ctx}\n\n{enhanced_message}"
+
         # Context 窗口管理
         raw_history = state.get("messages", [])
         context = prepare_context(
             raw_history, "specialist",
-            user_message=enhanced_message,
+            memory_summary=state.get("memory_summary", ""),
         )
         history = _messages_to_history(context)
 
@@ -476,7 +580,10 @@ async def supervisor_node(state: dict) -> dict:
 
         # Context 窗口管理
         history = _messages_to_history(
-            prepare_context(state.get("messages", []), "supervisor")
+            prepare_context(
+                state.get("messages", []), "supervisor",
+                memory_summary=state.get("memory_summary", ""),
+            )
         )
 
         decision = await agent.decide(
@@ -618,6 +725,7 @@ async def build_customer_service_graph() -> StateGraph:
     builder = StateGraph(CustomerServiceState)
 
     # --- 注册节点 ---
+    builder.add_node("memory", memory_node)
     builder.add_node("triage", triage_node)
     builder.add_node("faq_answer", faq_answer_node)
     builder.add_node("technical", technical_node)
@@ -630,8 +738,9 @@ async def build_customer_service_graph() -> StateGraph:
 
     # --- 边 ---
 
-    # START → triage
-    builder.add_edge(START, "triage")
+    # START → memory（生成会话摘要）→ triage
+    builder.add_edge(START, "memory")
+    builder.add_edge("memory", "triage")
 
     # triage → 条件路由
     builder.add_conditional_edges(
