@@ -69,9 +69,8 @@ def _init_tools(registry):
     """初始化并注册所有默认工具"""
     from src.tools.knowledge_search import KnowledgeSearchTool
     from src.tools.crm import CRMLookupTool
-    from src.tools.order import OrderLookupTool, OrderStatusTool
-    from src.tools.human_handoff import HumanHandoffTool
-    from src.tools.ticket import MockTicketCreateTool, MockTicketQueryTool
+    from src.tools.order import OrderLookupTool
+    from src.tools.ticket import TicketCreateTool, TicketQueryTool
     from src.knowledge.loader import load_default_faqs
 
     # 知识库工具 — 加载 FAQ 数据到内存（关键词检索，13 条 FAQ 足够用）
@@ -80,18 +79,16 @@ def _init_tools(registry):
     registry.register(kb_tool)
     registry.register(CRMLookupTool())
     registry.register(OrderLookupTool())
-    registry.register(OrderStatusTool())
-    registry.register(HumanHandoffTool())
-    registry.register(MockTicketCreateTool())
-    registry.register(MockTicketQueryTool())
+    registry.register(TicketCreateTool())
+    registry.register(TicketQueryTool())
 
     # 工具绑定到 Agent
     registry.bind_to_agent("faq_answer", ["knowledge_search"])
-    registry.bind_to_agent("technical", ["knowledge_search", "order_lookup", "order_status", "ticket_create"])
+    registry.bind_to_agent("technical", ["knowledge_search", "order_lookup", "ticket_create", "ticket_query"])
     registry.bind_to_agent("billing", ["crm_lookup", "order_lookup", "ticket_create"])
     registry.bind_to_agent("product", ["knowledge_search", "order_lookup"])
     registry.bind_to_agent("complaint", [
-        "crm_lookup", "order_lookup", "ticket_create", "human_handoff"
+        "crm_lookup", "order_lookup", "ticket_create", "ticket_query"
     ])
     registry.bind_to_agent("supervisor", ["all"])
 

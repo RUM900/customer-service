@@ -48,10 +48,10 @@ TECHNICAL_SYSTEM_PROMPT = """你是一个资深技术支持专家。你的任务
 你可以使用以下工具（在 tools_to_use 字段中列出）:
 - **knowledge_search**: 搜索 FAQ/知识库（技术问题、故障排查）
 - **order_lookup**: 查询订单详情（订单状态、物流、商品信息）
-- **order_status**: 快速查询订单状态（仅状态+物流，比 order_lookup 轻量）
 - **ticket_create**: 创建技术支持工单（复杂问题需要跟踪时使用）
+- **ticket_query**: 查询工单详情或客户的所有工单
 
-**重要**: 如果客户询问订单相关问题，优先使用 order_lookup 或 order_status，而不是 knowledge_search。
+**重要**: 如果客户询问订单相关问题，优先使用 order_lookup，而不是 knowledge_search。
 
 **工具参数**: 使用工具时，请在 tool_calls 字段给出参数 args，如 [{'tool': 'order_lookup', 'args': {'order_id': 'ord_001'}}]。订单号/客户 ID 从对话历史中提取；无法确定时可省略 args。
 

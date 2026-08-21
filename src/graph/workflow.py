@@ -475,7 +475,7 @@ async def tool_node(state: dict) -> dict:
     工具执行节点: 执行 specialist_response.tools_to_use 中的工具
 
     从 ToolRegistry 获取工具实例，执行后返回结果。
-    支持的工具: crm_lookup, order_lookup, order_status, knowledge_search, human_handoff
+    支持的工具: crm_lookup, order_lookup, knowledge_search, ticket_create, ticket_query
     """
     specialist_response = state.get("specialist_response", {})
     tools_to_use = specialist_response.get("tools_to_use", [])
@@ -952,7 +952,7 @@ async def _execute_tool_with_auto_args(tool, tool_name: str, user_message: str, 
         return await tool.execute(customer_id=customer_id)
 
     # 订单查询 — 提取订单 ID
-    elif tool_name in ("order_lookup", "order_status"):
+    elif tool_name == "order_lookup":
         match = re.search(r'ord_\w+', user_message)
         order_id = match.group(0) if match else ""
         if not order_id:
@@ -970,14 +970,6 @@ async def _execute_tool_with_auto_args(tool, tool_name: str, user_message: str, 
             customer_id=state.get("customer_id", ""),
             subject=user_message[:100],
             description=user_message[:500],
-        )
-
-    # 人工转接
-    elif tool_name == "human_handoff":
-        return await tool.execute(
-            session_id=state.get("session_id", "unknown"),
-            reason=state.get("escalation_reason", "客户要求"),
-            summary=user_message[:200],
         )
 
     # 默认

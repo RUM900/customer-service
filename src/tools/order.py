@@ -127,38 +127,3 @@ class OrderLookupTool(BaseTool):
             }
 
         return {"found": False, "message": "请提供 order_id 或 customer_id"}
-
-
-class OrderStatusTool(BaseTool):
-    """订单状态查询工具（快捷版）"""
-
-    name = "order_status"
-    description = "快速查询订单状态，返回当前状态和物流信息。比 order_lookup 更轻量。"
-
-    @property
-    def parameters(self) -> dict:
-        return {
-            "type": "object",
-            "properties": {
-                "order_id": {
-                    "type": "string",
-                    "description": "订单 ID",
-                },
-            },
-            "required": ["order_id"],
-        }
-
-    async def execute(self, order_id: str) -> dict:
-        order = _MOCK_ORDERS.get(order_id)
-        if order is None:
-            return {"found": False, "message": f"未找到订单 {order_id}"}
-
-        return {
-            "found": True,
-            "order_id": order.order_id,
-            "status": order.status.value,
-            "tracking_number": order.tracking_number,
-            "placed_at": order.placed_at,
-            "shipped_at": order.shipped_at,
-            "delivered_at": order.delivered_at,
-        }

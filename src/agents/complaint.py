@@ -2,7 +2,7 @@
 Complaint Agent — 投诉处理
 
 职责: 客户投诉接收、共情沟通、问题调查、补偿方案
-工具: crm_lookup, order_lookup, ticket_create, human_handoff
+工具: crm_lookup, order_lookup, ticket_create, ticket_query
 """
 import logging
 from typing import Optional
@@ -53,7 +53,7 @@ COMPLAINT_SYSTEM_PROMPT = """你是一个资深投诉处理专家。你的任务
 - crm_lookup: 查询客户等级和历史
 - order_lookup: 查询相关订单
 - ticket_create: 创建投诉工单
-- human_handoff: 升级到人工处理
+- ticket_query: 查询工单详情或客户的所有工单
 
 **工具参数**: 使用工具时，请在 tool_calls 字段给出参数 args，如 [{'tool': 'order_lookup', 'args': {'order_id': 'ord_001'}}]。订单号/客户 ID 从对话历史中提取；无法确定时可省略 args。
 

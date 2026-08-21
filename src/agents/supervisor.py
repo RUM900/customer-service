@@ -63,10 +63,9 @@ SUPERVISOR_SYSTEM_PROMPT = """你是一个高级客服主管。你接收从 Spec
 ## 工具使用
 
 你有权限使用所有工具:
-- crm_lookup, order_lookup, order_status
+- crm_lookup, order_lookup
 - knowledge_search
 - ticket_create, ticket_query
-- human_handoff
 
 请在做出决策后给出完整的 SupervisorDecision。"""
 

@@ -359,19 +359,6 @@ class TestTools:
         assert result["found"] is True
         assert len(result["orders"]) >= 2
 
-    @pytest.mark.asyncio
-    async def test_human_handoff(self):
-        from src.tools.human_handoff import HumanHandoffTool
-
-        tool = HumanHandoffTool()
-        result = await tool.execute(
-            session_id="sess_test",
-            reason="客户要求退款超出权限",
-            summary="客户订单 ord_001 要求全额退款+赔偿",
-        )
-        assert result["handoff_requested"] is True
-        assert "转接人工" in result["message"]
-
 
 # ============================================================
 # FAQ 知识库测试
