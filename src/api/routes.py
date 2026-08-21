@@ -144,7 +144,7 @@ async def chat_stream(
     _auth: str = Depends(require_agent),
 ):
     """SSE 流式端点 — 实时推送 Agent 工作进度"""
-    from src.graph.workflow import run_customer_service_stream
+    from src.graph.workflow import run_customer_service_stream, _new_thread_id
 
     # 与 POST /chat 一致：输入消毒
     clean_message = sanitize_user_input(message)
@@ -160,7 +160,9 @@ async def chat_stream(
             await store.save_message(session_id, user_msg)
 
             graph = await get_graph()
-            thread_config = {"configurable": {"thread_id": session_id}}
+            # 每轮独立 thread（与 workflow 内部保持一致，aget_state 才能取到最终状态）
+            thread_id = _new_thread_id(session_id)
+            thread_config = {"configurable": {"thread_id": thread_id}}
 
             async for event in run_customer_service_stream(
                 session_id=session_id,
@@ -168,6 +170,7 @@ async def chat_stream(
                 customer_id=customer_id or "",
                 history_messages=history,
                 graph=graph,
+                thread_id=thread_id,
             ):
                 yield {
                     "event": "agent_update",

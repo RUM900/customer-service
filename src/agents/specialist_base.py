@@ -62,6 +62,16 @@ class SpecialistResponse(BaseModel):
         description="需要调用的工具名称列表"
     )
 
+    tool_calls: list[dict] = Field(
+        default_factory=list,
+        description=(
+            "工具调用的参数（优先于 tools_to_use 单独提供参数）。"
+            "格式: [{'tool': 'order_lookup', 'args': {'order_id': 'ord_001'}}]。"
+            "参数从对话历史/客户消息中提取：订单号用 order_id、客户用 customer_id、"
+            "知识库搜索用 query；无法确定参数时可省略 args，系统会自动提取。"
+        ),
+    )
+
     # 置信度
     confidence: float = Field(
         default=0.8,

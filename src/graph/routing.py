@@ -23,8 +23,9 @@ def route_after_triage(state: dict) -> str:
     triage = state.get("triage_result")
 
     if triage is None:
-        # Triage 失败，兜底到 technical
-        return "technical"
+        # Triage 失败：直接结束（triage_node 已设置友好的降级回复），
+        # 不再兜底到 technical 避免浪费一次注定失败的 LLM 调用
+        return "__end__"
 
     # 如果需要立即转人工
     if triage.get("requires_immediate_human"):
@@ -71,12 +72,19 @@ def route_after_specialist(state: dict) -> str:
     if response is None:
         return "__end__"
 
-    # 工具执行优先：如果有工具待调用且未超过最大轮次
+    # 工具执行优先：如果有待调用且未超过最大轮次的工具
     tools_to_use = response.get("tools_to_use", [])
     if tools_to_use:
         tool_round = state.get("tool_round", 0)
         max_tool_rounds = state.get("max_tool_rounds", 3)
-        if tool_round < max_tool_rounds:
+        # 已成功执行过的工具不重复执行（防止 LLM 反复请求同一工具造成循环）
+        executed = {
+            r.get("tool")
+            for r in state.get("tool_results", [])
+            if "result" in r and not r.get("error")
+        }
+        pending = [t for t in tools_to_use if t not in executed]
+        if pending and tool_round < max_tool_rounds:
             return "tools"
 
     if response.get("is_resolved"):

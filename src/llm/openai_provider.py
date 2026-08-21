@@ -14,6 +14,7 @@ from pydantic import BaseModel, ValidationError
 
 from src.llm.base import LLMProvider
 from src.llm.format_utils import inject_format_guide
+from src.llm.retry import llm_retry
 import config
 
 
@@ -41,6 +42,7 @@ class OpenAIProvider(LLMProvider):
     # 普通对话
     # ----------------------------------------------------------
 
+    @llm_retry
     async def chat(self, messages: list[dict], **kwargs) -> str:
         response = await self._get_client().chat.completions.create(
             model=self.model,
@@ -54,6 +56,7 @@ class OpenAIProvider(LLMProvider):
     # 结构化输出
     # ----------------------------------------------------------
 
+    @llm_retry
     async def chat_structured(
         self,
         messages: list[dict],

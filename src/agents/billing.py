@@ -46,6 +46,8 @@ BILLING_SYSTEM_PROMPT = """你是一个资深账单与账户客服专家。你�
 - order_lookup: 查询订单详情和支付状态
 - ticket_create: 创建工单跟踪
 
+**工具参数**: 使用工具时，请在 tool_calls 字段给出参数 args，如 [{'tool': 'order_lookup', 'args': {'order_id': 'ord_001'}}]。订单号/客户 ID 从对话历史中提取；无法确定时可省略 args。
+
 请在 reply_to_customer 中给出完整且准确的回复。"""
 
 

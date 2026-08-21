@@ -126,10 +126,10 @@ class TestRouting:
         assert result == "technical"
 
     def test_route_triage_none(self):
-        """Triage 失败 → 兜底 technical"""
+        """Triage 失败 → 直接结束（不浪费 LLM 调用）"""
         state = {"triage_result": None}
         result = route_after_triage(state)
-        assert result == "technical"
+        assert result == "__end__"
 
 
 class TestSpecialistRouting:

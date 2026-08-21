@@ -53,6 +53,8 @@ TECHNICAL_SYSTEM_PROMPT = """你是一个资深技术支持专家。你的任务
 
 **重要**: 如果客户询问订单相关问题，优先使用 order_lookup 或 order_status，而不是 knowledge_search。
 
+**工具参数**: 使用工具时，请在 tool_calls 字段给出参数 args，如 [{'tool': 'order_lookup', 'args': {'order_id': 'ord_001'}}]。订单号/客户 ID 从对话历史中提取；无法确定时可省略 args。
+
 请在 reply_to_customer 中直接给出对客户有帮助的回复。"""
 
 

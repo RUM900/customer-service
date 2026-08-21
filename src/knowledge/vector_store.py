@@ -39,6 +39,18 @@ class VectorStore:
         self._client = None
         self._persist_dir = persist_dir
         self._collection_name = collection_name
+        self._embedder = None
+
+    def _get_embedder(self):
+        """懒加载 embedding 客户端（DashScope text-embedding-v1）"""
+        if self._embedder is None:
+            from src.knowledge.embedder import APIEmbedder
+            self._embedder = APIEmbedder()
+        return self._embedder
+
+    def _embed(self, texts: list[str]) -> list[list[float]]:
+        """调用 embedding API 将文本转为向量（失败抛异常）"""
+        return self._get_embedder().embed(texts)
 
     def _init_chroma(self) -> bool:
         """
@@ -102,6 +114,15 @@ class VectorStore:
         if not self._collection:
             logger.warning("ChromaDB 未就绪，跳过索引")
             return
+
+        # 未显式提供向量时，用 DashScope 中文向量模型计算
+        if embeddings is None:
+            try:
+                embeddings = self._embed(documents)
+            except Exception as e:
+                logger.warning(f"向量化失败，跳过索引: {e}")
+                return
+
         self._collection.add(
             ids=ids,
             documents=documents,
@@ -178,9 +199,16 @@ class VectorStore:
         if category:
             where_filter = {"category": category}
 
+        # 用同一向量模型计算查询向量
+        try:
+            query_vec = self._embed([query])[0]
+        except Exception as e:
+            logger.warning(f"查询向量化失败: {e}")
+            return []
+
         try:
             results = self._collection.query(
-                query_texts=[query],
+                query_embeddings=[query_vec],
                 n_results=top_k,
                 where=where_filter,
             )

@@ -55,6 +55,8 @@ COMPLAINT_SYSTEM_PROMPT = """你是一个资深投诉处理专家。你的任务
 - ticket_create: 创建投诉工单
 - human_handoff: 升级到人工处理
 
+**工具参数**: 使用工具时，请在 tool_calls 字段给出参数 args，如 [{'tool': 'order_lookup', 'args': {'order_id': 'ord_001'}}]。订单号/客户 ID 从对话历史中提取；无法确定时可省略 args。
+
 请在 reply_to_customer 中给出温暖的、有实质内容的回复。"""
 
 

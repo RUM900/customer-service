@@ -49,8 +49,8 @@ MODEL_SPECIALIST = os.getenv("MODEL_SPECIALIST", "qwen-turbo")
 # Supervisor Agent: 复杂决策，需要最强模型
 MODEL_SUPERVISOR = os.getenv("MODEL_SUPERVISOR", "qwen-plus")
 
-# FAQ Embedding 模型
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-v3")
+# FAQ Embedding 模型（DashScope 中文向量模型）
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-v1")
 
 # ============================================================
 # LLM 参数

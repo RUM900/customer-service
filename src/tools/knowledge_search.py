@@ -11,7 +11,6 @@ import time
 from typing import Optional
 
 from src.tools.base import BaseTool
-import config
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +19,9 @@ class KnowledgeSearchTool(BaseTool):
     """
     FAQ 知识库检索工具
 
-    通过向量相似度检索最匹配的 FAQ 条目。
-    如果 ChromaDB 未初始化或无数据，降级为关键词匹配。
+    向量检索委托给共享的 VectorStore 单例（与知识库管理端同一个实例，
+    避免多个 ChromaDB 客户端操作同一路径）。
+    如果向量库未就绪或无结果，降级为关键词匹配。
     """
 
     name = "knowledge_search"
@@ -31,8 +31,8 @@ class KnowledgeSearchTool(BaseTool):
     )
 
     def __init__(self):
-        self._collection = None
-        self._faq_data: list[dict] = []  # fallback 数据
+        self._vector_store = None  # 共享 VectorStore 单例（懒加载）
+        self._faq_data: list[dict] = []  # 关键词 fallback 数据
 
     # ----------------------------------------------------------
     # 参数 Schema
@@ -77,19 +77,19 @@ class KnowledgeSearchTool(BaseTool):
         """
         start = time.time()
 
-        # 尝试向量检索
+        # 优先向量检索，无结果再降级关键词
         results = self._vector_search(query, category, top_k)
-
-        # fallback: 关键词匹配
+        method = "vector"
         if not results:
             results = self._keyword_search(query, category, top_k)
+            method = "keyword"
 
         elapsed_ms = (time.time() - start) * 1000
 
         return {
             "results": results,
             "top_score": results[0]["score"] if results else 0.0,
-            "method": "vector" if self._collection else "keyword",
+            "method": method,
             "search_time_ms": round(elapsed_ms, 2),
         }
 
@@ -97,36 +97,33 @@ class KnowledgeSearchTool(BaseTool):
     # 向量检索
     # ----------------------------------------------------------
 
+    def _get_vector_store(self):
+        """懒加载共享的 VectorStore（与知识库管理端同一个实例）"""
+        if self._vector_store is None:
+            from src.api.deps import get_knowledge_store
+            self._vector_store = get_knowledge_store()
+        return self._vector_store
+
     def _vector_search(
         self, query: str, category: Optional[str], top_k: int
     ) -> list[dict]:
-        """ChromaDB 向量检索"""
-        if not self._collection:
+        """ChromaDB 向量检索（委托给共享 VectorStore）"""
+        vs = self._get_vector_store()
+        if vs is None or not vs._collection:
             return []
 
         try:
-            where_filter = None
-            if category:
-                where_filter = {"category": category}
-
-            results = self._collection.query(
-                query_texts=[query],
-                n_results=top_k,
-                where=where_filter,
-            )
-
-            formatted = []
-            if results and results["ids"] and results["ids"][0]:
-                for i, doc_id in enumerate(results["ids"][0]):
-                    formatted.append({
-                        "faq_id": doc_id,
-                        "question": results["metadatas"][0][i].get("question", ""),
-                        "answer": results["documents"][0][i],
-                        "score": 1.0 - (i * 0.15),  # 近似分数
-                        "category": results["metadatas"][0][i].get("category", ""),
-                    })
-            return formatted
-
+            results = vs.search(query, top_k=top_k, category=category)
+            return [
+                {
+                    "faq_id": r["faq_id"],
+                    "question": r["question"],
+                    "answer": r["answer"],
+                    "score": r["score"],
+                    "category": r.get("category", ""),
+                }
+                for r in results
+            ]
         except Exception as e:
             logger.warning(f"向量检索失败: {e}")
             return []
@@ -170,73 +167,6 @@ class KnowledgeSearchTool(BaseTool):
     # ----------------------------------------------------------
 
     def load_data(self, faq_entries: list[dict]) -> None:
-        """加载 FAQ 数据到内存（fallback）"""
+        """加载 FAQ 数据到内存（关键词 fallback）"""
         self._faq_data = faq_entries
         logger.info(f"FAQ 数据已加载: {len(faq_entries)} 条")
-
-    def init_chroma(self, persist_dir: Optional[str] = None) -> None:
-        """初始化 ChromaDB 集合（懒加载 chromadb 依赖）"""
-        try:
-            import chromadb
-            from chromadb.config import Settings as ChromaSettings
-            persist_dir = persist_dir or config.CHROMA_PERSIST_DIR
-            client = chromadb.PersistentClient(
-                path=persist_dir,
-                settings=ChromaSettings(anonymized_telemetry=False),
-            )
-
-            self._collection = client.get_or_create_collection(
-                name=config.CHROMA_COLLECTION_NAME,
-            )
-            logger.info(f"ChromaDB 已初始化: {persist_dir}, 集合: {config.CHROMA_COLLECTION_NAME}")
-        except Exception as e:
-            logger.warning(f"ChromaDB 初始化失败，将使用关键词匹配: {e}")
-            self._collection = None
-
-    def index_faqs(self, faq_entries: list[dict], embed_func=None) -> None:
-        """
-        将 FAQ 数据索引到 ChromaDB
-
-        Args:
-            faq_entries: FAQ 条目列表
-            embed_func: 可选的 embedding 函数
-        """
-        if not self._collection:
-            logger.warning("ChromaDB 未初始化，跳过索引")
-            return
-
-        # 只删除 FAQ 类条目（kind=faq），避免误删上传文档
-        try:
-            existing = self._collection.get(where={"kind": "faq"})
-            if existing and existing["ids"]:
-                self._collection.delete(ids=existing["ids"])
-        except Exception:
-            pass
-
-        # 批量添加
-        ids = []
-        documents = []
-        metadatas = []
-
-        for entry in faq_entries:
-            faq_id = entry.get("faq_id", f"faq_{len(ids)}")
-            ids.append(faq_id)
-            documents.append(entry.get("answer", ""))
-            metadatas.append({
-                "question": entry.get("question", ""),
-                "category": entry.get("category", "general"),
-                "tags": ",".join(entry.get("tags", [])),
-                "kind": "faq",
-                "source": entry.get("source") or "faq_samples.json",
-            })
-
-        if ids:
-            self._collection.add(
-                ids=ids,
-                documents=documents,
-                metadatas=metadatas,
-            )
-            logger.info(f"已索引 {len(ids)} 条 FAQ 到 ChromaDB")
-
-        # 同时更新内存数据
-        self._faq_data = faq_entries

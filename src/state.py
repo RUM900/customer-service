@@ -16,6 +16,7 @@ class CustomerServiceState(TypedDict, total=False):
     session_id: str
     customer_id: Optional[str]
     user_message: str
+    thread_id: str  # 每轮对话的独立 checkpointer thread（避免跨轮消息重复累积）
 
     # === 消息（operator.add 累积） ===
     messages: Annotated[list[dict], operator.add]

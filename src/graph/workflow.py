@@ -125,6 +125,7 @@ async def triage_node(state: dict) -> dict:
         logger.error(f"[Triage] 失败: {e}")
         return {
             "status": ConversationStatus.ERROR.value,
+            "final_reply": "抱歉，服务暂时繁忙，请稍后再试。",
             "errors": [AgentError(
                 agent_name="triage",
                 error_type=type(e).__name__,
@@ -188,6 +189,7 @@ async def faq_answer_node(state: dict) -> dict:
         logger.error(f"[FAQ] 失败: {e}")
         return {
             "status": ConversationStatus.ERROR.value,
+            "final_reply": "抱歉，服务暂时繁忙，请稍后再试。",
             "errors": [AgentError(
                 agent_name="faq_answer",
                 error_type=type(e).__name__,
@@ -237,7 +239,8 @@ async def specialist_node(state: dict, agent_name: str) -> dict:
             enhanced_message = (
                 f"{user_message}\n\n"
                 f"[系统提示] 以下工具已经被调用并返回结果，请直接使用这些数据回复客户，"
-                f"不要再请求调用这些工具: {', '.join(executed)}\n"
+                f"不要再请求调用这些工具: {', '.join(executed)}。"
+                f"如果数据已足够回答，请务必将 tools_to_use 设为空数组 []，不要重复请求已执行过的工具。\n"
                 f"工具执行结果：\n{results_text}"
             )
 
@@ -297,6 +300,7 @@ async def specialist_node(state: dict, agent_name: str) -> dict:
         logger.error(f"[{agent_name}] 失败: {e}")
         return {
             "status": ConversationStatus.ERROR.value,
+            "final_reply": "抱歉，服务暂时繁忙，请稍后再试。",
             "errors": [AgentError(
                 agent_name=agent_name,
                 error_type=type(e).__name__,
@@ -337,6 +341,12 @@ async def tool_node(state: dict) -> dict:
     if not tools_to_use:
         return {"tool_round": tool_round + 1}
 
+    # 优先使用 LLM 结构化输出的工具参数（可从对话历史提取），缺失时回落自动提取
+    args_map: dict[str, dict] = {}
+    for tc in specialist_response.get("tool_calls", []) or []:
+        if isinstance(tc, dict):
+            args_map[tc.get("tool")] = tc.get("args") or {}
+
     try:
         from src.api.deps import get_tool_registry
         registry = get_tool_registry()
@@ -355,7 +365,11 @@ async def tool_node(state: dict) -> dict:
             try:
                 # 根据用户消息自动推断参数
                 user_message = state.get("user_message", "")
-                result = await _execute_tool_with_auto_args(tool, tool_name, user_message, state)
+                args = args_map.get(tool_name)
+                if args:
+                    result = await tool.execute(**args)
+                else:
+                    result = await _execute_tool_with_auto_args(tool, tool_name, user_message, state)
                 tool_results.append({
                     "tool": tool_name,
                     "result": result,
@@ -442,8 +456,8 @@ async def supervisor_node(state: dict) -> dict:
                 "message": f"人工审核请求: {decision.reasoning}",
                 "review_items": decision.review_items,
             }
-            # 加入审核队列
-            thread_id = state.get("session_id", "unknown")
+            # 加入审核队列（用每轮独立 thread_id，管理员据此恢复图执行）
+            thread_id = state.get("thread_id") or state.get("session_id", "unknown")
             await add_review(thread_id, review_context)
             # 挂起执行
             human_decision = interrupt(review_context)
@@ -506,13 +520,14 @@ async def human_handoff_node(state: dict) -> dict:
     """
     reason = state.get("escalation_reason", "客户要求转人工")
     session_id = state.get("session_id", "unknown")
+    thread_id = state.get("thread_id") or session_id
     logger.warning(f"[HumanHandoff] 转人工申请: {reason[:80]}")
 
     # 加入人工审核队列（DB 持久化，内存兜底）
     try:
         from src.api.review_store import add_review
 
-        await add_review(session_id, {
+        await add_review(thread_id, {
             "session_id": session_id,
             "review_type": "human_handoff",
             "message": f"客户要求转人工: {reason}",
@@ -650,11 +665,24 @@ async def build_customer_service_graph() -> StateGraph:
 # ============================================================
 
 
+def _new_thread_id(session_id: str) -> str:
+    """为每轮对话生成独立的 checkpointer thread_id
+
+    原因: messages 通道是 operator.add 累积，若每轮复用同一个 thread 并传入完整历史，
+    会被 checkpointer 重复叠加。独立 thread 每轮从输入重建，避免累积；
+    同时保留 interrupt() 所需的进程内检查点（HITL 审核在当轮 thread 上恢复）。
+    """
+    from uuid import uuid4
+
+    return f"{session_id}:{uuid4().hex[:8]}"
+
+
 def _build_initial_state(
     session_id: str,
     user_message: str,
     customer_id: str = "",
     history_messages: Optional[list[dict]] = None,
+    thread_id: Optional[str] = None,
 ) -> tuple[dict, dict]:
     """构建初始 state 和 thread_config（提取公共模式）"""
     initial_state = create_initial_state(
@@ -665,7 +693,9 @@ def _build_initial_state(
     initial_state["user_message"] = user_message
     if history_messages:
         initial_state["messages"] = list(history_messages)
-    thread_config = {"configurable": {"thread_id": session_id}}
+    thread_id = thread_id or _new_thread_id(session_id)
+    initial_state["thread_id"] = thread_id
+    thread_config = {"configurable": {"thread_id": thread_id}}
     return initial_state, thread_config
 
 
@@ -675,6 +705,7 @@ async def run_customer_service(
     customer_id: str = "",
     history_messages: Optional[list[dict]] = None,
     graph: Optional[StateGraph] = None,
+    thread_id: Optional[str] = None,
 ) -> dict:
     """
     执行一轮客服对话
@@ -685,6 +716,7 @@ async def run_customer_service(
         customer_id: 客户 ID（可选）
         history_messages: 历史消息
         graph: 预编译的 StateGraph 实例（可选，不传则自动获取）
+        thread_id: 可选，指定 checkpointer thread（默认每轮生成独立 thread）
 
     Returns:
         更新后的 state dict
@@ -694,7 +726,7 @@ async def run_customer_service(
         graph = await get_graph()
 
     initial_state, thread_config = _build_initial_state(
-        session_id, user_message, customer_id, history_messages,
+        session_id, user_message, customer_id, history_messages, thread_id,
     )
 
     final_state = await graph.ainvoke(initial_state, thread_config)
@@ -707,6 +739,7 @@ async def run_customer_service_stream(
     customer_id: str = "",
     history_messages: Optional[list[dict]] = None,
     graph: Optional[StateGraph] = None,
+    thread_id: Optional[str] = None,
 ) -> AsyncGenerator[dict, None]:
     """
     流式执行客服对话 — 每个节点完成后 yield state 更新
@@ -717,6 +750,7 @@ async def run_customer_service_stream(
         customer_id: 客户 ID
         history_messages: 历史消息
         graph: 预编译的 StateGraph 实例（可选）
+        thread_id: 可选，指定 checkpointer thread（默认每轮生成独立 thread）
 
     Yields:
         每个节点的 state 更新 dict
@@ -726,7 +760,7 @@ async def run_customer_service_stream(
         graph = await get_graph()
 
     initial_state, thread_config = _build_initial_state(
-        session_id, user_message, customer_id, history_messages,
+        session_id, user_message, customer_id, history_messages, thread_id,
     )
 
     async for event in graph.astream(initial_state, thread_config, stream_mode="updates"):

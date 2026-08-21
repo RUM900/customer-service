@@ -45,6 +45,8 @@ PRODUCT_SYSTEM_PROMPT = """你是一个资深产品顾问。你的任务是回�
 - knowledge_search: 搜索产品知识库
 - order_lookup: 查询客户历史订单（了解偏好）
 
+**工具参数**: 使用工具时，请在 tool_calls 字段给出参数 args，如 [{'tool': 'order_lookup', 'args': {'order_id': 'ord_001'}}]。订单号/客户 ID 从对话历史中提取；无法确定时可省略 args。
+
 请在 reply_to_customer 中给出有帮助的、准确的回复。"""
 
 

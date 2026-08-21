@@ -152,10 +152,23 @@ class StorageProvider:
 
         async def _do(db):
             from src.memory.session import SessionStore
+            from src.models.conversation import ConversationStatus, Tier
+
             store = SessionStore(db)
             existing = await store.get(session_id)
             if existing:
                 for k, v in kwargs.items():
+                    # 枚举字段需转回枚举类型（update_session 收到的是字符串）
+                    if k == "status" and isinstance(v, str):
+                        try:
+                            v = ConversationStatus(v)
+                        except ValueError:
+                            pass
+                    elif k == "current_tier" and isinstance(v, str):
+                        try:
+                            v = Tier(v)
+                        except ValueError:
+                            pass
                     if hasattr(existing, k):
                         setattr(existing, k, v)
                 await store.update(existing)
