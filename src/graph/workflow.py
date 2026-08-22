@@ -755,6 +755,7 @@ async def build_customer_service_graph() -> StateGraph:
             "product": "product",
             "complaint": "complaint",
             "human_handoff": "human_handoff",
+            "__end__": END,
         },
     )
 
