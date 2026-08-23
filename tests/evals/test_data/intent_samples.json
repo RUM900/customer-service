@@ -1,0 +1,352 @@
+[
+  {
+    "id": 1,
+    "message": "我的订单还没收到，已经等了5天了",
+    "expected_intent": "order_status",
+    "expected_agent": "technical",
+    "category": "订单"
+  },
+  {
+    "id": 2,
+    "message": "我要退款",
+    "expected_intent": "refund_request",
+    "expected_agent": "billing",
+    "category": "退款"
+  },
+  {
+    "id": 3,
+    "message": "App 一直闪退，重装也没用",
+    "expected_intent": "technical_support",
+    "expected_agent": "technical",
+    "category": "技术"
+  },
+  {
+    "id": 4,
+    "message": "这个产品和那个有什么区别？",
+    "expected_intent": "product_inquiry",
+    "expected_agent": "product",
+    "category": "产品"
+  },
+  {
+    "id": 5,
+    "message": "你们的服务太差了，我要投诉！",
+    "expected_intent": "complaint",
+    "expected_agent": "complaint",
+    "category": "投诉"
+  },
+  {
+    "id": 6,
+    "message": "怎么修改收货地址",
+    "expected_intent": "faq",
+    "expected_agent": "faq_answer",
+    "category": "FAQ"
+  },
+  {
+    "id": 7,
+    "message": "我的账户余额怎么查",
+    "expected_intent": "billing_account",
+    "expected_agent": "billing",
+    "category": "账户"
+  },
+  {
+    "id": 8,
+    "message": "无法登录，一直提示密码错误",
+    "expected_intent": "account_issue",
+    "expected_agent": "billing",
+    "category": "账户"
+  },
+  {
+    "id": 9,
+    "message": "你们有什么优惠活动吗",
+    "expected_intent": "product_inquiry",
+    "expected_agent": "product",
+    "category": "产品"
+  },
+  {
+    "id": 10,
+    "message": "订单号 ord_12345 什么时候发货",
+    "expected_intent": "order_status",
+    "expected_agent": "technical",
+    "category": "订单"
+  },
+  {
+    "id": 11,
+    "message": "蓝牙连不上手机怎么办",
+    "expected_intent": "technical_support",
+    "expected_agent": "technical",
+    "category": "技术"
+  },
+  {
+    "id": 12,
+    "message": "我想取消订阅",
+    "expected_intent": "billing_account",
+    "expected_agent": "billing",
+    "category": "账户"
+  },
+  {
+    "id": 13,
+    "message": "产品质量有问题，收到就是坏的",
+    "expected_intent": "complaint",
+    "expected_agent": "complaint",
+    "category": "投诉"
+  },
+  {
+    "id": 14,
+    "message": "运费多少钱",
+    "expected_intent": "faq",
+    "expected_agent": "faq_answer",
+    "category": "FAQ"
+  },
+  {
+    "id": 15,
+    "message": "可以开发票吗",
+    "expected_intent": "faq",
+    "expected_agent": "faq_answer",
+    "category": "FAQ"
+  },
+  {
+    "id": 16,
+    "message": "Pro 版本和普通版有什么区别",
+    "expected_intent": "product_inquiry",
+    "expected_agent": "product",
+    "category": "产品"
+  },
+  {
+    "id": 17,
+    "message": "我被多扣钱了",
+    "expected_intent": "billing_account",
+    "expected_agent": "billing",
+    "category": "账户"
+  },
+  {
+    "id": 18,
+    "message": "快递显示已签收但我没收到",
+    "expected_intent": "complaint",
+    "expected_agent": "complaint",
+    "category": "投诉"
+  },
+  {
+    "id": 19,
+    "message": "怎么联系人工客服",
+    "expected_intent": "other",
+    "expected_agent": "technical",
+    "category": "其他"
+  },
+  {
+    "id": 20,
+    "message": "页面加载很慢是怎么回事",
+    "expected_intent": "technical_support",
+    "expected_agent": "technical",
+    "category": "技术"
+  },
+  {
+    "id": 21,
+    "message": "可以货到付款吗",
+    "expected_intent": "faq",
+    "expected_agent": "faq_answer",
+    "category": "FAQ"
+  },
+  {
+    "id": 22,
+    "message": "退款多久到账",
+    "expected_intent": "refund_request",
+    "expected_agent": "billing",
+    "category": "退款"
+  },
+  {
+    "id": 23,
+    "message": "我想换个颜色可以吗",
+    "expected_intent": "order_status",
+    "expected_agent": "technical",
+    "category": "订单"
+  },
+  {
+    "id": 24,
+    "message": "你们客服态度太差了",
+    "expected_intent": "complaint",
+    "expected_agent": "complaint",
+    "category": "投诉"
+  },
+  {
+    "id": 25,
+    "message": "这款支持 5G 吗",
+    "expected_intent": "product_inquiry",
+    "expected_agent": "product",
+    "category": "产品"
+  },
+  {
+    "id": 26,
+    "message": "积分怎么兑换",
+    "expected_intent": "billing_account",
+    "expected_agent": "billing",
+    "category": "账户"
+  },
+  {
+    "id": 27,
+    "message": "设备突然黑屏了",
+    "expected_intent": "technical_support",
+    "expected_agent": "technical",
+    "category": "技术"
+  },
+  {
+    "id": 28,
+    "message": "营业时间是几点到几点",
+    "expected_intent": "faq",
+    "expected_agent": "faq_answer",
+    "category": "FAQ"
+  },
+  {
+    "id": 29,
+    "message": "会员有什么权益",
+    "expected_intent": "product_inquiry",
+    "expected_agent": "product",
+    "category": "产品"
+  },
+  {
+    "id": 30,
+    "message": "已经申请退款3天了还没处理",
+    "expected_intent": "complaint",
+    "expected_agent": "complaint",
+    "category": "投诉"
+  },
+  {
+    "id": 31,
+    "message": "怎么绑定银行卡",
+    "expected_intent": "billing_account",
+    "expected_agent": "billing",
+    "category": "账户"
+  },
+  {
+    "id": 32,
+    "message": "充电充不进去",
+    "expected_intent": "technical_support",
+    "expected_agent": "technical",
+    "category": "技术"
+  },
+  {
+    "id": 33,
+    "message": "有没有新用户优惠",
+    "expected_intent": "product_inquiry",
+    "expected_agent": "product",
+    "category": "产品"
+  },
+  {
+    "id": 34,
+    "message": "物流信息一直不更新",
+    "expected_intent": "order_status",
+    "expected_agent": "technical",
+    "category": "订单"
+  },
+  {
+    "id": 35,
+    "message": "支持七天无理由退货吗",
+    "expected_intent": "faq",
+    "expected_agent": "faq_answer",
+    "category": "FAQ"
+  },
+  {
+    "id": 36,
+    "message": "手机号换了怎么改绑",
+    "expected_intent": "account_issue",
+    "expected_agent": "billing",
+    "category": "账户"
+  },
+  {
+    "id": 37,
+    "message": "你好",
+    "expected_intent": "faq",
+    "expected_agent": "faq_answer",
+    "category": "其他"
+  },
+  {
+    "id": 38,
+    "message": "我要给你们差评",
+    "expected_intent": "complaint",
+    "expected_agent": "complaint",
+    "category": "投诉"
+  },
+  {
+    "id": 39,
+    "message": "这个能便宜点吗",
+    "expected_intent": "product_inquiry",
+    "expected_agent": "product",
+    "category": "产品"
+  },
+  {
+    "id": 40,
+    "message": "固件怎么升级",
+    "expected_intent": "technical_support",
+    "expected_agent": "technical",
+    "category": "技术"
+  },
+  {
+    "id": 41,
+    "message": "优惠券怎么用",
+    "expected_intent": "faq",
+    "expected_agent": "faq_answer",
+    "category": "FAQ"
+  },
+  {
+    "id": 42,
+    "message": "申请退货后怎么寄回去",
+    "expected_intent": "refund_request",
+    "expected_agent": "billing",
+    "category": "退款"
+  },
+  {
+    "id": 43,
+    "message": "包装破损，产品也坏了",
+    "expected_intent": "complaint",
+    "expected_agent": "complaint",
+    "category": "投诉"
+  },
+  {
+    "id": 44,
+    "message": "哪款性价比最高",
+    "expected_intent": "product_inquiry",
+    "expected_agent": "product",
+    "category": "产品"
+  },
+  {
+    "id": 45,
+    "message": "扫码支付失败",
+    "expected_intent": "technical_support",
+    "expected_agent": "technical",
+    "category": "技术"
+  },
+  {
+    "id": 46,
+    "message": "账单明细在哪里看",
+    "expected_intent": "billing_account",
+    "expected_agent": "billing",
+    "category": "账户"
+  },
+  {
+    "id": 47,
+    "message": "物流太慢了能催一下吗",
+    "expected_intent": "order_status",
+    "expected_agent": "technical",
+    "category": "订单"
+  },
+  {
+    "id": 48,
+    "message": "你们门店地址在哪",
+    "expected_intent": "faq",
+    "expected_agent": "faq_answer",
+    "category": "FAQ"
+  },
+  {
+    "id": 49,
+    "message": "我要找你们经理",
+    "expected_intent": "complaint",
+    "expected_agent": "complaint",
+    "category": "投诉"
+  },
+  {
+    "id": 50,
+    "message": "保修期多久",
+    "expected_intent": "faq",
+    "expected_agent": "faq_answer",
+    "category": "FAQ"
+  }
+]
