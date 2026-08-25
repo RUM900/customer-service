@@ -144,6 +144,9 @@ API_PORT = int(os.getenv("API_PORT", "8000"))
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 
+# 是否信任 X-Forwarded-For（部署在反向代理/Nginx 后需设为 true，否则拿不到真实客户端 IP）
+TRUST_X_FORWARDED_FOR = os.getenv("TRUST_X_FORWARDED_FOR", "false").lower() in ("true", "1", "yes")
+
 # ============================================================
 # 日志配置
 # ============================================================

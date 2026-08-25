@@ -66,7 +66,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not request.url.path.startswith("/chat"):
             return await call_next(request)
 
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = self._get_client_ip(request)
         now = time.time()
 
         # 清理当前 IP 的过期记录
@@ -99,6 +99,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             self._force_cleanup(now)
 
         return await call_next(request)
+
+    def _get_client_ip(self, request: Request) -> str:
+        """获取真实客户端 IP
+
+        部署在反向代理后（Nginx 等），request.client.host 会是代理 IP，
+        需要信任 X-Forwarded-For 才能拿到真实客户端 IP。
+        默认不信任 XFF（防伪造绕过限流），仅在 TRUST_X_FORWARDED_FOR=true 时启用。
+        """
+        if config.TRUST_X_FORWARDED_FOR:
+            xff = request.headers.get("X-Forwarded-For")
+            if xff:
+                # X-Forwarded-For 格式: "client, proxy1, proxy2"，取第一个
+                return xff.split(",")[0].strip()
+        return request.client.host if request.client else "unknown"
 
     def _cleanup_stale_entries(self, now: float) -> None:
         """定期清理所有过期的 IP 记录"""

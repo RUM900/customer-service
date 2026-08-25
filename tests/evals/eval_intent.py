@@ -118,7 +118,7 @@ async def run_evaluation(samples: list[dict], dry_run: bool = False) -> list[dic
         results.append(result)
 
         # 打印即时结果
-        status = "✓" if result["intent_correct"] else "✗"
+        status = "[OK]" if result["intent_correct"] else "[X]"
         print(f"  {status} 预测: {result['predicted_intent']} (期望: {result['expected_intent']})")
 
         # 避免 API 限流
@@ -218,7 +218,7 @@ def print_report(metrics: dict):
 
     print(f"\n【分类别准确率】")
     for cat, acc in sorted(metrics["category_accuracy"].items()):
-        bar = "█" * int(acc * 20) + "░" * (20 - int(acc * 20))
+        bar = "#" * int(acc * 20) + "." * (20 - int(acc * 20))
         print(f"  {cat:20s} {bar} {acc:.2%}")
 
     if metrics["wrong_samples"]:

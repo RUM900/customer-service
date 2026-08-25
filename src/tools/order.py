@@ -1,77 +1,17 @@
 """
-订单工具 — 订单查询与操作（模拟数据）
+订单工具 — 订单查询
 
-真实环境应对接实际的订单系统（如电商平台的订单 API）。
+数据源策略: 数据库优先，内置演示数据兜底（降级）
+- 正常: 从 orders 表读取（启动时 seed 演示数据）
+- 数据库不可用/未初始化: 回退到内置演示数据，保证服务可用
+
+真实环境可将 execute() 内的查询替换为订单系统 API 调用。
 """
 import logging
 
 from src.tools.base import BaseTool
-from src.models.customer import Order, OrderStatus
 
 logger = logging.getLogger(__name__)
-
-# ============================================================
-# 模拟订单数据
-# ============================================================
-
-_MOCK_ORDERS = {
-    "ord_001": Order(
-        order_id="ord_001",
-        customer_id="cust_001",
-        status=OrderStatus.SHIPPED,
-        items=[
-            {"name": "机械键盘 K8 Pro", "quantity": 1, "price": 599.00},
-            {"name": "鼠标垫 XL", "quantity": 2, "price": 49.00},
-        ],
-        total_amount=697.00,
-        currency="CNY",
-        shipping_address="北京市朝阳区xxx路100号",
-        tracking_number="SF1234567890",
-        placed_at="2025-07-01T10:30:00",
-        shipped_at="2025-07-02T14:00:00",
-    ),
-    "ord_002": Order(
-        order_id="ord_002",
-        customer_id="cust_001",
-        status=OrderStatus.PROCESSING,
-        items=[
-            {"name": "显示器 27寸 4K", "quantity": 1, "price": 2999.00},
-        ],
-        total_amount=2999.00,
-        currency="CNY",
-        shipping_address="北京市朝阳区xxx路100号",
-        tracking_number=None,
-        placed_at="2025-07-05T09:00:00",
-    ),
-    "ord_003": Order(
-        order_id="ord_003",
-        customer_id="cust_002",
-        status=OrderStatus.DELIVERED,
-        items=[
-            {"name": "蓝牙耳机 Pro", "quantity": 1, "price": 899.00},
-        ],
-        total_amount=899.00,
-        currency="CNY",
-        shipping_address="上海市浦东新区xxx路200号",
-        tracking_number="YT9876543210",
-        placed_at="2025-06-28T16:00:00",
-        shipped_at="2025-06-29T10:00:00",
-        delivered_at="2025-07-01T08:30:00",
-    ),
-    "ord_004": Order(
-        order_id="ord_004",
-        customer_id="cust_003",
-        status=OrderStatus.PROCESSING,
-        items=[
-            {"name": "手机壳 iPhone 15", "quantity": 1, "price": 99.00},
-        ],
-        total_amount=99.00,
-        currency="CNY",
-        shipping_address="广州市天河区xxx路50号",
-        tracking_number="ZTO1122334455",
-        placed_at="2025-06-25T12:00:00",
-    ),
-}
 
 
 class OrderLookupTool(BaseTool):
@@ -105,21 +45,46 @@ class OrderLookupTool(BaseTool):
         order_id: str = "",
         customer_id: str = "",
     ) -> dict:
-        # 按订单 ID 查询
+        # --- 优先读数据库 ---
+        try:
+            from src.memory.database import get_session_factory
+            from src.memory.customer_store import OrderStore
+
+            factory = get_session_factory()
+            async with factory() as db:
+                store = OrderStore(db)
+
+                if order_id:
+                    order = await store.get(order_id)
+                    if order is not None:
+                        logger.info(f"订单查询(DB): {order_id} → {order.status.value}")
+                        return {"found": True, "order": order.model_dump()}
+
+                if customer_id:
+                    orders = await store.list_by_customer(customer_id)
+                    logger.info(f"客户订单查询(DB): {customer_id} → {len(orders)} 条")
+                    return {
+                        "found": len(orders) > 0,
+                        "customer_id": customer_id,
+                        "orders": [o.model_dump() for o in orders],
+                        "total": len(orders),
+                    }
+        except Exception as e:
+            logger.warning(f"订单数据库查询失败，回退内置数据: {e}")
+
+        # --- 回退内置演示数据（数据库不可用/未初始化） ---
+        from src.memory.customer_store import DEMO_ORDERS
+
         if order_id:
-            order = _MOCK_ORDERS.get(order_id)
+            order = next((o for o in DEMO_ORDERS if o.order_id == order_id), None)
             if order is None:
                 return {"found": False, "order_id": order_id, "message": f"未找到订单 {order_id}"}
-            logger.info(f"订单查询: {order_id} → {order.status.value}")
+            logger.info(f"订单查询(内置): {order_id} → {order.status.value}")
             return {"found": True, "order": order.model_dump()}
 
-        # 按客户 ID 查询
         if customer_id:
-            orders = [
-                o for o in _MOCK_ORDERS.values()
-                if o.customer_id == customer_id
-            ]
-            logger.info(f"客户订单查询: {customer_id} → {len(orders)} 条")
+            orders = [o for o in DEMO_ORDERS if o.customer_id == customer_id]
+            logger.info(f"客户订单查询(内置): {customer_id} → {len(orders)} 条")
             return {
                 "found": len(orders) > 0,
                 "customer_id": customer_id,

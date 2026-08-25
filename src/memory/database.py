@@ -146,8 +146,17 @@ async def init_db():
         from src.memory.model_config import AgentModelRow
         from src.memory.faq_store import FaqRow
         from src.memory.review import ReviewRow
+        from src.memory.customer_store import CustomerRow, OrderRow
 
         engine = get_engine()
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("数据库表已初始化（开发模式: create_all）")
+
+        # seed 演示客户/订单数据（幂等，仅表空时插入）
+        from src.memory.customer_store import seed_demo_data
+
+        factory = get_session_factory()
+        async with factory() as db:
+            await seed_demo_data(db)
+            await db.commit()

@@ -1,54 +1,17 @@
 """
-CRM 工具 — 客户信息查询（模拟数据）
+CRM 工具 — 客户信息查询
 
-真实环境应对接实际的 CRM 系统（如 Salesforce、Zendesk）。
+数据源策略: 数据库优先，内置演示数据兜底（降级）
+- 正常: 从 customers 表读取（启动时 seed 演示数据）
+- 数据库不可用/未初始化: 回退到内置演示数据，保证服务可用
+
+真实环境可将 execute() 内的查询替换为外部 CRM API 调用（如 Salesforce）。
 """
 import logging
 
 from src.tools.base import BaseTool
-from src.models.customer import Customer, CustomerTier
 
 logger = logging.getLogger(__name__)
-
-# ============================================================
-# 模拟客户数据
-# ============================================================
-
-_MOCK_CUSTOMERS = {
-    "cust_001": Customer(
-        customer_id="cust_001",
-        name="张三",
-        email="zhangsan@example.com",
-        phone="13800000001",
-        tier=CustomerTier.VIP,
-        total_orders=156,
-        total_spent=28900.50,
-        joined_at="2023-01-15",
-        tags=["vip", "长期客户", "高价值"],
-    ),
-    "cust_002": Customer(
-        customer_id="cust_002",
-        name="李四",
-        email="lisi@example.com",
-        phone="13800000002",
-        tier=CustomerTier.PREMIUM,
-        total_orders=42,
-        total_spent=8750.00,
-        joined_at="2024-03-20",
-        tags=["premium", "活跃"],
-    ),
-    "cust_003": Customer(
-        customer_id="cust_003",
-        name="王五",
-        email="wangwu@example.com",
-        phone="13800000003",
-        tier=CustomerTier.STANDARD,
-        total_orders=3,
-        total_spent=450.00,
-        joined_at="2025-06-01",
-        tags=["新客户"],
-    ),
-}
 
 
 class CRMLookupTool(BaseTool):
@@ -74,7 +37,25 @@ class CRMLookupTool(BaseTool):
         }
 
     async def execute(self, customer_id: str) -> dict:
-        customer = _MOCK_CUSTOMERS.get(customer_id)
+        # --- 优先读数据库 ---
+        try:
+            from src.memory.database import get_session_factory
+            from src.memory.customer_store import CustomerStore
+
+            factory = get_session_factory()
+            async with factory() as db:
+                customer = await CustomerStore(db).get(customer_id)
+
+            if customer is not None:
+                logger.info(f"CRM 查询(DB): {customer_id} → {customer.name}")
+                return {"found": True, "customer": customer.model_dump()}
+        except Exception as e:
+            logger.warning(f"CRM 数据库查询失败，回退内置数据: {e}")
+
+        # --- 回退内置演示数据（数据库不可用/未初始化） ---
+        from src.memory.customer_store import DEMO_CUSTOMERS
+
+        customer = next((c for c in DEMO_CUSTOMERS if c.customer_id == customer_id), None)
         if customer is None:
             return {
                 "found": False,
@@ -82,7 +63,7 @@ class CRMLookupTool(BaseTool):
                 "message": f"未找到客户 {customer_id}",
             }
 
-        logger.info(f"CRM 查询: {customer_id} → {customer.name}")
+        logger.info(f"CRM 查询(内置): {customer_id} → {customer.name}")
         return {
             "found": True,
             "customer": customer.model_dump(),

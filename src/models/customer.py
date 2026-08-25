@@ -1,7 +1,5 @@
 """
 客户模型 — 客户信息、工单、订单
-
-部分模型为模拟数据（CRM / Order 查询），真实环境需对接实际系统。
 """
 from datetime import datetime
 from enum import Enum
@@ -23,7 +21,7 @@ class CustomerTier(str, Enum):
 
 
 class Customer(BaseModel):
-    """客户信息（模拟 CRM）"""
+    """客户信息"""
     customer_id: str = Field(default_factory=lambda: f"cust_{uuid4().hex[:8]}")
     name: str = ""
     email: str = ""
@@ -53,7 +51,7 @@ class OrderStatus(str, Enum):
 
 
 class Order(BaseModel):
-    """订单信息（模拟订单系统）"""
+    """订单信息"""
     order_id: str = Field(default_factory=lambda: f"ord_{uuid4().hex[:8]}")
     customer_id: str = ""
     status: OrderStatus = OrderStatus.PENDING
