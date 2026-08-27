@@ -57,6 +57,55 @@ class LLMProvider(ABC):
         """Provider 名称标识"""
         ...
 
+    # ----------------------------------------------------------
+    # 可观测性埋点
+    # ----------------------------------------------------------
+
+    def _record_call(
+        self,
+        call_type: str,
+        usage=None,
+        latency_ms: float = 0.0,
+        success: bool = True,
+        error: str = "",
+        retry_count: int = 0,
+    ) -> None:
+        """统一记录一次 LLM 调用（token 用量 + 耗时 + 错误）
+
+        兼容 OpenAI/DashScope(prompt_tokens) 与 Claude(input_tokens) 的
+        usage 字段差异，通过 context 隐式获取 trace_id / agent_name。
+        """
+        from src.llm.telemetry import (
+            LLMCallRecord, record_call, get_trace_id, get_agent_name,
+        )
+
+        # 兼容两种 usage 字段命名
+        prompt_tokens = getattr(usage, "prompt_tokens", None)
+        if prompt_tokens is None:
+            prompt_tokens = getattr(usage, "input_tokens", 0) or 0
+        completion_tokens = getattr(usage, "completion_tokens", None)
+        if completion_tokens is None:
+            completion_tokens = getattr(usage, "output_tokens", 0) or 0
+        total_tokens = getattr(usage, "total_tokens", None)
+        if total_tokens is None:
+            total_tokens = int(prompt_tokens or 0) + int(completion_tokens or 0)
+
+        record = LLMCallRecord(
+            trace_id=get_trace_id(),
+            agent_name=get_agent_name(),
+            provider=self.provider_name,
+            model=self.model,
+            call_type=call_type,
+            prompt_tokens=int(prompt_tokens or 0),
+            completion_tokens=int(completion_tokens or 0),
+            total_tokens=int(total_tokens or 0),
+            latency_ms=round(latency_ms, 1),
+            success=success,
+            error=error,
+            retry_count=retry_count,
+        )
+        record_call(record)
+
 
 class LLMFactory:
     """

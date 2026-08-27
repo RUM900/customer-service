@@ -8,6 +8,7 @@ Claude Provider — Anthropic Claude API
 文档: https://docs.anthropic.com/en/api/messages
 """
 import json
+import time
 from typing import AsyncGenerator, Type
 
 from pydantic import BaseModel, ValidationError
@@ -80,7 +81,7 @@ class ClaudeProvider(LLMProvider):
     @llm_retry
     async def chat(self, messages: list[dict], **kwargs) -> str:
         system_prompt, claude_msgs = self._convert_messages(messages)
-
+        start = time.time()
         response = await self._get_client().messages.create(
             model=self.model,
             max_tokens=kwargs.get("max_tokens", self.max_tokens),
@@ -88,7 +89,8 @@ class ClaudeProvider(LLMProvider):
             messages=claude_msgs,
             temperature=kwargs.get("temperature", self.temperature),
         )
-        # Claude 返回的 content 是 list[ContentBlock]，可能为空
+        latency_ms = (time.time() - start) * 1000
+        self._record_call("chat", response.usage, latency_ms)
         if not response.content:
             raise RuntimeError("Claude 返回了空的 content 列表")
         return response.content[0].text
@@ -112,6 +114,7 @@ class ClaudeProvider(LLMProvider):
         inject_format_guide(msgs, schema)
 
         for attempt in range(1, max_retries + 1):
+            start = time.time()
             system_prompt, claude_msgs = self._convert_messages(msgs)
 
             # Claude 不支持原生 JSON mode，在 system prompt 中强调
@@ -127,7 +130,10 @@ class ClaudeProvider(LLMProvider):
                 messages=claude_msgs,
                 temperature=kwargs.get("temperature", self.temperature),
             )
+            latency_ms = (time.time() - start) * 1000
             if not response.content:
+                self._record_call("chat_structured", response.usage, latency_ms,
+                                  success=False, error="Claude 返回空", retry_count=attempt)
                 msgs.append({"role": "assistant", "content": "[empty response]"})
                 msgs.append({
                     "role": "user",
@@ -148,6 +154,8 @@ class ClaudeProvider(LLMProvider):
             try:
                 data = json.loads(raw)
             except json.JSONDecodeError:
+                self._record_call("chat_structured", response.usage, latency_ms,
+                                  success=False, error="JSON 解析失败", retry_count=attempt)
                 msgs.append({"role": "assistant", "content": raw})
                 msgs.append({
                     "role": "user",
@@ -156,9 +164,15 @@ class ClaudeProvider(LLMProvider):
                 continue
 
             try:
-                return response_model(**data)
+                result = response_model(**data)
+                self._record_call("chat_structured", response.usage, latency_ms,
+                                  success=True, retry_count=attempt)
+                return result
             except ValidationError as e:
                 error_detail = json.dumps(e.errors(), ensure_ascii=False)
+                self._record_call("chat_structured", response.usage, latency_ms,
+                                  success=False, error=f"校验失败: {error_detail[:200]}",
+                                  retry_count=attempt)
                 msgs.append({"role": "assistant", "content": raw})
                 msgs.append({
                     "role": "user",
@@ -178,13 +192,17 @@ class ClaudeProvider(LLMProvider):
         **kwargs,
     ) -> AsyncGenerator[str, None]:
         system_prompt, claude_msgs = self._convert_messages(messages)
-
-        async with self._get_client().messages.stream(
-            model=self.model,
-            max_tokens=kwargs.get("max_tokens", self.max_tokens),
-            system=system_prompt or None,
-            messages=claude_msgs,
-            temperature=kwargs.get("temperature", self.temperature),
-        ) as stream:
-            async for text in stream.text_stream:
-                yield text
+        start = time.time()
+        try:
+            async with self._get_client().messages.stream(
+                model=self.model,
+                max_tokens=kwargs.get("max_tokens", self.max_tokens),
+                system=system_prompt or None,
+                messages=claude_msgs,
+                temperature=kwargs.get("temperature", self.temperature),
+            ) as stream:
+                async for text in stream.text_stream:
+                    yield text
+        finally:
+            latency_ms = (time.time() - start) * 1000
+            self._record_call("chat_stream", None, latency_ms)

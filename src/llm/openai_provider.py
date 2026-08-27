@@ -7,6 +7,7 @@ OpenAI Provider — 支持 OpenAI 官方 API 及兼容服务
 - 其他 OpenAI-compatible 服务（vLLM, LocalAI 等）
 """
 import json
+import time
 from typing import AsyncGenerator, Type
 
 from openai import AsyncOpenAI
@@ -44,12 +45,15 @@ class OpenAIProvider(LLMProvider):
 
     @llm_retry
     async def chat(self, messages: list[dict], **kwargs) -> str:
+        start = time.time()
         response = await self._get_client().chat.completions.create(
             model=self.model,
             messages=messages,
             temperature=kwargs.get("temperature", self.temperature),
             max_tokens=kwargs.get("max_tokens", self.max_tokens),
         )
+        latency_ms = (time.time() - start) * 1000
+        self._record_call("chat", response.usage, latency_ms)
         return response.choices[0].message.content or ""
 
     # ----------------------------------------------------------
@@ -70,6 +74,7 @@ class OpenAIProvider(LLMProvider):
         inject_format_guide(msgs, schema)
 
         for attempt in range(1, max_retries + 1):
+            start = time.time()
             try:
                 # OpenAI 原生支持 response_format
                 response = await self._get_client().chat.completions.create(
@@ -87,12 +92,14 @@ class OpenAIProvider(LLMProvider):
                     temperature=kwargs.get("temperature", self.temperature),
                     max_tokens=kwargs.get("max_tokens", self.max_tokens),
                 )
-
+            latency_ms = (time.time() - start) * 1000
             raw = response.choices[0].message.content or ""
 
             try:
                 data = json.loads(extract_json(raw))
             except json.JSONDecodeError:
+                self._record_call("chat_structured", response.usage, latency_ms,
+                                  success=False, error="JSON 解析失败", retry_count=attempt)
                 msgs.append({"role": "assistant", "content": raw})
                 msgs.append({
                     "role": "user",
@@ -101,9 +108,15 @@ class OpenAIProvider(LLMProvider):
                 continue
 
             try:
-                return response_model(**data)
+                result = response_model(**data)
+                self._record_call("chat_structured", response.usage, latency_ms,
+                                  success=True, retry_count=attempt)
+                return result
             except ValidationError as e:
                 error_detail = json.dumps(e.errors(), ensure_ascii=False)
+                self._record_call("chat_structured", response.usage, latency_ms,
+                                  success=False, error=f"校验失败: {error_detail[:200]}",
+                                  retry_count=attempt)
                 msgs.append({"role": "assistant", "content": raw})
                 msgs.append({
                     "role": "user",
@@ -122,15 +135,20 @@ class OpenAIProvider(LLMProvider):
         messages: list[dict],
         **kwargs,
     ) -> AsyncGenerator[str, None]:
-        stream = await self._get_client().chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=kwargs.get("temperature", self.temperature),
-            max_tokens=kwargs.get("max_tokens", self.max_tokens),
-            stream=True,
-        )
-        async for chunk in stream:
-            delta = chunk.choices[0].delta
-            if delta.content:
-                yield delta.content
+        start = time.time()
+        try:
+            stream = await self._get_client().chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=kwargs.get("temperature", self.temperature),
+                max_tokens=kwargs.get("max_tokens", self.max_tokens),
+                stream=True,
+            )
+            async for chunk in stream:
+                delta = chunk.choices[0].delta
+                if delta.content:
+                    yield delta.content
+        finally:
+            latency_ms = (time.time() - start) * 1000
+            self._record_call("chat_stream", None, latency_ms)
 

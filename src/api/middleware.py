@@ -13,6 +13,8 @@ from fastapi import Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from src.llm.telemetry import new_trace_id
+
 import config
 
 logger = logging.getLogger("api")
@@ -26,6 +28,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """记录每个请求的耗时和状态"""
 
     async def dispatch(self, request: Request, call_next):
+        # 为每个请求生成 trace_id，穿透到后续 LLM 调用（可观测性）
+        new_trace_id()
         start = time.time()
         response = await call_next(request)
         elapsed_ms = (time.time() - start) * 1000

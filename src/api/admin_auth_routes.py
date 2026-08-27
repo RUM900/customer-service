@@ -5,7 +5,7 @@
 """
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from src.api.auth import require_admin, create_token
@@ -17,6 +17,35 @@ import config
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["管理后台"])
+
+
+# ============================================================
+# LLM 可观测性：调用链追踪
+# ============================================================
+
+@router.get("/traces", summary="LLM 调用追踪（可观测性）")
+async def list_traces(
+    limit: int = Query(50, ge=1, le=500),
+    _auth: str = Depends(require_admin),
+):
+    """查看最近 LLM 调用记录：token 用量、耗时、错误、成本估算"""
+    from src.llm.telemetry import get_recent_calls
+
+    calls = get_recent_calls(limit)
+    total = len(calls)
+    success = sum(1 for c in calls if c["success"])
+    total_tokens = sum(c["total_tokens"] for c in calls)
+    avg_latency = sum(c["latency_ms"] for c in calls) / total if total else 0
+    total_cost = sum(c["cost"] for c in calls)
+
+    return {
+        "total": total,
+        "success_rate": round(success / total, 4) if total else None,
+        "total_tokens": total_tokens,
+        "avg_latency_ms": round(avg_latency, 1),
+        "total_cost_cny": round(total_cost, 6),
+        "calls": calls,
+    }
 
 
 # ============================================================

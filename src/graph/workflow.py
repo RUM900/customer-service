@@ -22,6 +22,7 @@ from typing import Optional, AsyncGenerator
 
 from langgraph.graph import StateGraph, START, END
 
+from src.llm.telemetry import set_agent_name
 from src.state import create_initial_state, CustomerServiceState
 from src.models.conversation import (
     Message, MessageRole, ConversationStatus, Tier,
@@ -149,6 +150,7 @@ async def _summarize_messages(old_messages: list[dict], existing_summary: str = 
 
 async def memory_node(state: dict) -> dict:
     """会话记忆节点：当历史过长时，把超出保留窗口的旧消息压缩为摘要记忆"""
+    set_agent_name("memory")
     messages = state.get("messages", [])
     existing = state.get("memory_summary", "") or ""
 
@@ -177,6 +179,7 @@ async def triage_node(state: dict) -> dict:
     输入: state["user_message"], state["messages"]
     输出: state["triage_result"], state["routing_decision"], state["active_agent"]
     """
+    set_agent_name("triage")
     user_message = state.get("user_message", "")
     logger.info(f"[Triage] 分析消息: '{user_message[:80]}...'")
 
@@ -231,6 +234,7 @@ async def faq_answer_node(state: dict) -> dict:
     FAQ 回答节点: 先查知识库（向量检索），高置信直接返回标准答案；
     低置信 / 未命中 / 检索失败则用 LLM 现答。
     """
+    set_agent_name("faq_answer")
     user_message = state.get("user_message", "")
     triage = state.get("triage_result") or {}
 
@@ -347,6 +351,7 @@ async def specialist_node(state: dict, agent_name: str) -> dict:
     支持 technical / billing / product / complaint。
     如果有上一轮工具执行结果，会注入到 prompt 中供 Agent 参考。
     """
+    set_agent_name(agent_name)
     user_message = state.get("user_message", "")
     triage = state.get("triage_result") or {}
     triage_summary = triage.get("summary", "")
@@ -563,6 +568,7 @@ async def supervisor_node(state: dict) -> dict:
     """
     Supervisor 节点: 审查升级案例，做出最终决策
     """
+    set_agent_name("supervisor")
     escalation_reason = state.get("escalation_reason", "")
     specialist_response = state.get("specialist_response", {})
     specialist_agent = state.get("specialist_agent", "unknown")
