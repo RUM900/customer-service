@@ -32,12 +32,13 @@ if config.config_file_name is not None:
 
 import config as app_config
 
-# 将 asyncpg URL 转为标准格式（Alembic 需要同步 URL 来生成 migration）
-# 对于 upgrade/downgrade，我们用 async engine
-_sync_url = (
-    app_config.DATABASE_URL.replace("+asyncpg", "").replace("+aiosqlite", "")
-)
-config.set_main_option("sqlalchemy.url", _sync_url)
+# asyncpg 的 URL 用 postgresql:// 前缀（async engine 兼容），
+# aiosqlite 的 URL 保持 sqlite+aiosqlite:// 前缀（async engine 需要 async driver）。
+# 注意：不要去掉 async driver，否则 async_engine_from_config 会报错。
+_db_url = app_config.DATABASE_URL
+# 标准化 asyncpg URL（仅去掉 +asyncpg 后缀，保留 postgresql+asyncpg? 不，async engine 需要 +asyncpg）
+# 实际上 async_engine_from_config 需要带 async driver 的 URL，直接用原始 URL 即可
+config.set_main_option("sqlalchemy.url", _db_url)
 
 # ============================================================
 # 元数据 — 导入所有 ORM 模型
@@ -52,7 +53,8 @@ from src.memory.ticket_store import TicketRow    # noqa: F401
 from src.memory.user import UserRow              # noqa: F401
 from src.memory.model_config import AgentModelRow  # noqa: F401
 from src.memory.faq_store import FaqRow          # noqa: F401
-from src.memory.review import ReviewRow          # noqa: F401
+from src.memory.review import ReviewRow         # noqa: F401
+from src.memory.customer_store import CustomerRow, OrderRow  # noqa: F401
 
 target_metadata = Base.metadata
 
