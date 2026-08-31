@@ -136,6 +136,15 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 MODEL_VALIDATION_ENABLED = os.getenv("MODEL_VALIDATION_ENABLED", "true").lower() in ("true", "1", "yes")
 
 # ============================================================
+# LangSmith 可观测性
+# ============================================================
+# 启用后自动 trace LangGraph 图执行 + LLM 调用
+LANGSMITH_TRACING = os.getenv("LANGSMITH_TRACING", "false").lower() in ("true", "1", "yes")
+LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY", "")
+LANGSMITH_PROJECT = os.getenv("LANGSMITH_PROJECT", "customer-service")
+LANGSMITH_ENDPOINT = os.getenv("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com")
+
+# ============================================================
 # API 配置
 # ============================================================
 

@@ -44,6 +44,16 @@ async def lifespan(app: FastAPI):
     logger.info(f"LLM Provider: {config.LLM_PROVIDER}")
     logger.info(f"API: http://{config.API_HOST}:{config.API_PORT}")
     logger.info(f"Swagger: http://{config.API_HOST}:{config.API_PORT}/docs")
+    # === LangSmith 可观测性：同步到进程环境变量，LangGraph 自动检测 ===
+    if config.LANGSMITH_TRACING and config.LANGSMITH_API_KEY:
+        import os
+        os.environ["LANGSMITH_TRACING"] = "true"
+        os.environ["LANGSMITH_API_KEY"] = config.LANGSMITH_API_KEY
+        os.environ["LANGSMITH_PROJECT"] = config.LANGSMITH_PROJECT
+        os.environ["LANGSMITH_ENDPOINT"] = config.LANGSMITH_ENDPOINT
+        logger.info(f"LangSmith trace 已启用，项目: {config.LANGSMITH_PROJECT}")
+    else:
+        logger.info("LangSmith trace 未启用")
     logger.info("=" * 60)
 
     # === 初始化数据库（开发模式自动建表，失败则降级内存）===
