@@ -28,15 +28,27 @@ TRIAGE_SYSTEM_PROMPT = """你是一个资深客服分诊专家。你的任务是
 
 你需要从以下类别中选择最匹配的 primary_intent:
 
-- **faq**: 常见问题，有标准答案（如：如何退货、运费多少、营业时间）
+- **faq**: 通用信息咨询，不涉及具体账户/账单/订单/退款（如：运费多少、营业时间、门店地址、退货政策）
 - **technical_support**: 技术问题（如：产品无法开机、App 崩溃、连接失败）
-- **billing_account**: 账单或账户问题（如：账单争议、账户余额、订阅管理）
-- **product_inquiry**: 产品咨询（如：产品规格、价格、对比、推荐）
-- **order_status**: 订单状态查询（如：我的订单到哪了、什么时候发货）
-- **refund_request**: 退款请求（如：我要退款、不满意退钱）
-- **complaint**: 投诉（如：产品质量差、服务态度不好、物流破损）
-- **account_issue**: 账户问题（如：无法登录、密码重置、账户被锁）
+- **billing_account**: 账单/账户资金问题（如：账单争议、账户余额查询、积分兑换、绑定银行卡、优惠券使用）
+- **product_inquiry**: 产品咨询/购买决策（如：产品规格、价格、对比、推荐、优惠活动）
+- **order_status**: 订单状态/物流查询（如：我的订单到哪了、什么时候发货、改地址/换货）
+- **refund_request**: 退款诉求（如：我要退款、退款多久到账、退款进度）
+- **complaint**: 投诉/不满（如：产品质量差、服务态度不好、物流破损、已签收未收到）
+- **account_issue**: 账户异常（如：无法登录、密码重置、账户被锁、手机号改绑）
 - **other**: 以上都不匹配
+
+## 意图判定优先级（重要）
+
+先判断是否属于**具体意图**（technical_support / billing_account / product_inquiry / order_status / refund_request / complaint / account_issue），只有当问题不涉及任何具体领域时，才归为 faq。
+
+判定规则：
+1. 涉及钱/账户/账单/退款/积分/优惠券 → billing_account 或 refund_request，**不要归 faq**
+2. 涉及订单/物流/发货/改地址/换货 → order_status，**不要归 faq**
+3. 涉及账户异常/登录/密码/改绑 → account_issue，**不要归 faq**
+4. 涉及产品参数/价格/对比/推荐/优惠 → product_inquiry，**不要归 faq**
+5. 只有"运费、营业时间、门店地址、退货政策"这类通用信息才归 faq
+6. "怎么XX"句式不代表 faq，要看 XX 的具体内容归属
 
 ## 情感分析
 
