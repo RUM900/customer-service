@@ -85,8 +85,18 @@ async def evaluate_single(sample: dict, triage_agent) -> dict:
         }
 
 
-async def run_evaluation(samples: list[dict], dry_run: bool = False) -> list[dict]:
-    """运行完整评估"""
+async def run_evaluation(
+    samples: list[dict],
+    dry_run: bool = False,
+    concurrency: int = 5,
+) -> list[dict]:
+    """运行完整评估
+
+    Args:
+        samples: 评估样本
+        dry_run: 是否跳过真实 LLM 调用
+        concurrency: 并发数（真实评估时同时进行的 LLM 调用数）
+    """
     if dry_run:
         # Dry run 模式：返回模拟结果
         print("[Dry Run] 跳过 LLM 调用，返回模拟数据")
@@ -106,25 +116,29 @@ async def run_evaluation(samples: list[dict], dry_run: bool = False) -> list[dic
             for s in samples
         ]
 
-    # 真实评估
+    # 真实评估（并发）
     from src.agents.triage import TriageAgent
 
     triage_agent = TriageAgent()
-    results = []
+    semaphore = asyncio.Semaphore(concurrency)
 
-    for i, sample in enumerate(samples):
-        print(f"[{i+1}/{len(samples)}] 评估: {sample['message'][:30]}...")
-        result = await evaluate_single(sample, triage_agent)
-        results.append(result)
+    async def _evaluate_one(i: int, sample: dict) -> dict:
+        async with semaphore:
+            print(f"[{i+1}/{len(samples)}] 评估: {sample['message'][:30]}...")
+            result = await evaluate_single(sample, triage_agent)
 
-        # 打印即时结果
-        status = "[OK]" if result["intent_correct"] else "[X]"
-        print(f"  {status} 预测: {result['predicted_intent']} (期望: {result['expected_intent']})")
+            status = "[OK]" if result["intent_correct"] else "[X]"
+            print(f"  {status} 预测: {result['predicted_intent']} (期望: {result['expected_intent']})")
 
-        # 避免 API 限流
-        await asyncio.sleep(0.5)
+            # 轻量限流：避免同一时刻打满 API
+            await asyncio.sleep(0.3)
+            return result
 
-    return results
+    # asyncio.gather 保序返回（与输入顺序一致）
+    results = await asyncio.gather(
+        *[_evaluate_one(i, s) for i, s in enumerate(samples)]
+    )
+    return list(results)
 
 
 # ============================================================
@@ -256,6 +270,10 @@ async def main():
     parser.add_argument("--limit", type=int, help="限制评估样本数量")
     parser.add_argument("--dry-run", action="store_true", help="不调用 LLM，只验证脚本")
     parser.add_argument("--save", action="store_true", help="保存评估报告到文件")
+    parser.add_argument(
+        "--concurrency", type=int, default=5,
+        help="并发评估数（默认 5，真实评估时同时进行的 LLM 调用数）",
+    )
     args = parser.parse_args()
 
     print("加载测试样本...")
@@ -263,7 +281,7 @@ async def main():
     print(f"共 {len(samples)} 个样本")
 
     print("\n开始评估...")
-    results = await run_evaluation(samples, dry_run=args.dry_run)
+    results = await run_evaluation(samples, dry_run=args.dry_run, concurrency=args.concurrency)
 
     print("\n计算指标...")
     metrics = compute_metrics(results)
