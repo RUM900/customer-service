@@ -242,18 +242,56 @@ customer-service/
 │   ├── static/               # Web UI（chat.html 聊天 / admin.html 管理后台）
 │   └── utils/                # 上下文窗口管理工具
 ├── migrations/               # Alembic 数据库迁移
-├── tests/                    # 63 个自动化测试 + evals/ 意图评估数据
+├── tests/                    # 83 个自动化测试 + evals/ 意图评估集
 └── data/                     # FAQ 示例数据（faq_samples.json / sample_policy.md）
 ```
 
 ## 运行测试
 
 ```bash
-pytest tests/ -v               # 全部测试（63 个）
+pytest tests/ -v               # 全部测试（83 个）
 pytest tests/test_llm.py -v    # LLM 层测试
 pytest tests/test_workflow.py -v  # 工作流集成测试
 pytest tests/test_api.py -v    # API 集成测试
+pytest tests/test_telemetry.py -v  # 可观测性埋点测试
 ```
+
+## 离线评估
+
+基于 50 条真实意图标注样本（覆盖 9 类意图）评估 Triage Agent 的分诊能力。
+
+```bash
+# 完整评估（真实 LLM 调用，默认并发 5）
+python -m tests.evals.eval_intent --save
+
+# 小批量试跑
+python -m tests.evals.eval_intent --limit 10
+
+# 不调 LLM，仅验证脚本
+python -m tests.evals.eval_intent --dry-run
+```
+
+> 评估脚本支持 `--concurrency` 并发参数（默认 5），50 条样本约 1 分钟跑完。
+> 报告输出到 `tests/evals/reports/`（含混淆矩阵与分类别准确率）。
+
+### 评估结果（最新）
+
+| 指标 | 优化前 | 优化后 |
+|------|--------|--------|
+| 意图识别准确率 | 74.00% | **78.00%** |
+| 路由准确率 | 76.00% | **78.00%** |
+| 平均置信度 | 0.91 | 0.91 |
+
+关键类别准确率变化：
+
+| 类别 | 优化前 | 优化后 |
+|------|--------|--------|
+| billing_account | 50% | **100%** |
+| account_issue | 50% | **100%** |
+| order_status | 80% | 100% |
+
+优化说明：通过错误分析发现 `faq` 意图被过度预测（吞掉 billing/refund/account_issue），
+针对性收窄 FAQ 定义、增加"具体意图优先于 faq"的判定规则后重跑。
 
 ## 技术栈
 
