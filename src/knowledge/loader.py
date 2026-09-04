@@ -50,10 +50,23 @@ def load_faq_from_json(file_path: str) -> list[dict]:
 
 def load_default_faqs() -> list[dict]:
     """
-    加载内置的默认 FAQ 数据
+    加载默认 FAQ 数据
 
-    当没有外部 FAQ 文件时使用，保证系统可运行。
+    优先从 data/faq_samples.json 读取（单一数据源，支持扩充/覆盖），
+    文件缺失或为空时回退到内置硬编码列表，保证系统可运行。
     """
+    # 优先读取外部数据文件（单一数据源）
+    try:
+        faq_file = Path(__file__).resolve().parent.parent.parent / "data" / "faq_samples.json"
+        if faq_file.exists():
+            faqs = load_faq_from_json(str(faq_file))
+            if faqs:
+                logger.info(f"默认 FAQ: 从文件加载 {len(faqs)} 条 ({faq_file})")
+                return faqs
+            logger.warning(f"FAQ 文件为空，回退内置列表: {faq_file}")
+    except Exception as e:
+        logger.warning(f"FAQ 文件加载失败，回退内置列表: {e}")
+
     return [
         # --- 订单类 ---
         {

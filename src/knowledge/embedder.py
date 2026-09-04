@@ -20,17 +20,40 @@ MAX_EMBED_CHARS = 1000
 class APIEmbedder:
     """通过 DashScope embedding API 将文本转为向量（同步）"""
 
+    # DashScope embedding API 单次请求最大文本数
+    BATCH_SIZE = 20
+
     def __init__(self, model: str = ""):
         self.model = model or config.EMBEDDING_MODEL
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        """将文本列表转为向量列表（保持输入顺序）"""
+        """将文本列表转为向量列表（保持输入顺序）
+
+        注意：DashScope embedding API 单次请求有限制（≤25 条），
+        数据量大时必须分批提交并合并结果，否则会返回 400。
+        """
         if not config.DASHSCOPE_API_KEY:
             raise RuntimeError("DASHSCOPE_API_KEY 未配置，无法使用向量嵌入")
 
         if not texts:
             return []
 
+        # 分批向量化，合并结果（保持原始顺序）
+        all_vectors: list[list[float]] = []
+        for i in range(0, len(texts), self.BATCH_SIZE):
+            batch = texts[i:i + self.BATCH_SIZE]
+            batch_vectors = self._embed_batch(batch)
+            all_vectors.extend(batch_vectors)
+
+        if len(all_vectors) != len(texts):
+            raise RuntimeError(
+                f"Embedding 返回数量不匹配: 期望 {len(texts)}，实际 {len(all_vectors)}"
+            )
+
+        return all_vectors
+
+    def _embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """单批次 embedding 调用（≤ BATCH_SIZE 条）"""
         import httpx
 
         trimmed = [t[:MAX_EMBED_CHARS] for t in texts]
