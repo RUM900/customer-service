@@ -519,7 +519,13 @@ async def tool_node(state: dict) -> dict:
                 user_message = state.get("user_message", "")
                 args = args_map.get(tool_name)
                 if args:
-                    result = await tool.execute(**args)
+                    # 过滤掉工具 schema 中不存在的参数（防 LLM 幻觉参数导致 TypeError）
+                    valid_keys = set((tool.parameters or {}).get("properties", {}).keys())
+                    filtered = {k: v for k, v in args.items() if k in valid_keys}
+                    if filtered:
+                        result = await tool.execute(**filtered)
+                    else:
+                        result = await _execute_tool_with_auto_args(tool, tool_name, user_message, state)
                 else:
                     result = await _execute_tool_with_auto_args(tool, tool_name, user_message, state)
                 tool_results.append({
@@ -656,6 +662,11 @@ async def supervisor_node(state: dict) -> dict:
         return result
 
     except Exception as e:
+        # 关键：LangGraph 的 GraphInterrupt（HITL 挂起）必须重新抛出，
+        # 让图挂起等待人工审核。不能当普通异常吞掉，否则 HITL 失效。
+        from langgraph.errors import GraphInterrupt
+        if isinstance(e, GraphInterrupt):
+            raise
         logger.error(f"[Supervisor] 失败: {e}")
         return {
             "status": ConversationStatus.ERROR.value,

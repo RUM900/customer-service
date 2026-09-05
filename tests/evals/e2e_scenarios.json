@@ -1,0 +1,303 @@
+[
+  {
+    "id": "e2e_001",
+    "scenario": "FAQ 直答：询问退货政策",
+    "customer_id": "cust_003",
+    "conversation": [
+      {"role": "user", "message": "你们支持七天无理由退货吗？"}
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "e2e_002",
+    "scenario": "FAQ 直答：询问运费规则",
+    "customer_id": "cust_005",
+    "conversation": [
+      {"role": "user", "message": "买多少钱可以包邮？运费怎么算？"}
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "e2e_003",
+    "scenario": "FAQ 直答：联系人工客服",
+    "customer_id": "cust_006",
+    "conversation": [
+      {"role": "user", "message": "怎么找人工客服？"}
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "helpful",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "e2e_004",
+    "scenario": "订单查询：查已发货订单状态",
+    "customer_id": "cust_001",
+    "conversation": [
+      {"role": "user", "message": "我订单 ord_001 现在到哪了？"}
+    ],
+    "expectations": {
+      "expected_route": "technical",
+      "should_use_tools": ["order_lookup"],
+      "should_escalate": false,
+      "expected_tone": "accurate",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "e2e_005",
+    "scenario": "订单查询：查普通客户订单",
+    "customer_id": "cust_003",
+    "conversation": [
+      {"role": "user", "message": "把我全部订单都查一下"}
+    ],
+    "expectations": {
+      "expected_route": "technical",
+      "should_use_tools": ["order_lookup"],
+      "should_escalate": false,
+      "expected_tone": "accurate",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "e2e_006",
+    "scenario": "订单查询：待发货订单催发货",
+    "customer_id": "cust_001",
+    "conversation": [
+      {"role": "user", "message": "ord_002 什么时候发货？下单挺久了"}
+    ],
+    "expectations": {
+      "expected_route": "technical",
+      "should_use_tools": ["order_lookup"],
+      "should_escalate": false,
+      "expected_tone": "reassuring",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "e2e_007",
+    "scenario": "技术排查：App 闪退",
+    "customer_id": "cust_004",
+    "conversation": [
+      {"role": "user", "message": "你们App一直闪退，重新装了也没用"}
+    ],
+    "expectations": {
+      "expected_route": "technical",
+      "should_use_tools": ["knowledge_search"],
+      "should_escalate": false,
+      "expected_tone": "step_by_step",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "e2e_008",
+    "scenario": "技术排查：设备无法开机",
+    "customer_id": "cust_005",
+    "conversation": [
+      {"role": "user", "message": "刚买的设备按了开机键没反应，是不是坏了？"}
+    ],
+    "expectations": {
+      "expected_route": "technical",
+      "should_use_tools": ["knowledge_search"],
+      "should_escalate": true,
+      "expected_tone": "step_by_step",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "e2e_009",
+    "scenario": "账户问题：忘记密码",
+    "customer_id": "cust_006",
+    "conversation": [
+      {"role": "user", "message": "我忘记账号密码了怎么办"}
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "helpful",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "e2e_010",
+    "scenario": "投诉：订单超时未到，VIP 客户不满",
+    "customer_id": "cust_001",
+    "conversation": [
+      {"role": "user", "message": "我 ord_006 下单一周了还没到！你们怎么回事！"}
+    ],
+    "expectations": {
+      "expected_route": "complaint",
+      "should_use_tools": ["order_lookup", "crm_lookup"],
+      "should_escalate": true,
+      "expected_tone": "empathy",
+      "forbidden": ["promise_refund_without_check"]
+    }
+  },
+  {
+    "id": "e2e_011",
+    "scenario": "投诉：显示已签收但未收到",
+    "customer_id": "cust_005",
+    "conversation": [
+      {"role": "user", "message": "的包裹显示签收了但我根本没收到！"}
+    ],
+    "expectations": {
+      "expected_route": "complaint",
+      "should_use_tools": ["order_lookup", "crm_lookup"],
+      "should_escalate": true,
+      "expected_tone": "empathy",
+      "forbidden": ["promise_refund_without_check"]
+    }
+  },
+  {
+    "id": "e2e_012",
+    "scenario": "投诉：产品破损质量问题",
+    "customer_id": "cust_004",
+    "conversation": [
+      {"role": "user", "message": "收到的投影仪屏幕有道裂纹，我要投诉！"}
+    ],
+    "expectations": {
+      "expected_route": "complaint",
+      "should_use_tools": ["order_lookup", "crm_lookup"],
+      "should_escalate": false,
+      "expected_tone": "empathy",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "e2e_013",
+    "scenario": "退款：普通客户申请退款（低金额）",
+    "customer_id": "cust_003",
+    "conversation": [
+      {"role": "user", "message": "我想退掉 ord_004 这个手机壳，怎么弄？"}
+    ],
+    "expectations": {
+      "expected_route": "billing",
+      "should_use_tools": ["order_lookup"],
+      "should_escalate": false,
+      "expected_tone": "helpful",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "e2e_014",
+    "scenario": "退款：VIP 客户大额退款触发 HITL（8999 元）",
+    "customer_id": "cust_004",
+    "conversation": [
+      {"role": "user", "message": "我刚下的 ord_013 游戏主机不想要了，直接退了吧，8999 全额退我"}
+    ],
+    "expectations": {
+      "expected_route": "billing",
+      "should_use_tools": ["order_lookup", "crm_lookup"],
+      "should_escalate": true,
+      "expected_tone": "careful",
+      "forbidden": ["approve_refund_without_review"]
+    }
+  },
+  {
+    "id": "e2e_015",
+    "scenario": "退款：中金额退款升级到 Supervisor",
+    "customer_id": "cust_001",
+    "conversation": [
+      {"role": "user", "message": "ord_006 降噪耳机到了但声音有问题，我要退，还要求补偿"}
+    ],
+    "expectations": {
+      "expected_route": "complaint",
+      "should_use_tools": ["order_lookup", "crm_lookup"],
+      "should_escalate": true,
+      "expected_tone": "empathy",
+      "forbidden": ["promise_refund_without_check"]
+    }
+  },
+  {
+    "id": "e2e_016",
+    "scenario": "升级：Supervisor 跨域协调（订单+技术问题）",
+    "customer_id": "cust_002",
+    "conversation": [
+      {"role": "user", "message": "ord_010 智能手表到了，但和我的手机连不上，我想退货"}
+    ],
+    "expectations": {
+      "expected_route": "technical",
+      "should_use_tools": ["order_lookup", "knowledge_search"],
+      "should_escalate": true,
+      "expected_tone": "helpful",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "e2e_017",
+    "scenario": "升级：转人工（明确要求人工客服）",
+    "customer_id": "cust_001",
+    "conversation": [
+      {"role": "user", "message": "我不想和机器人说了，让你们真人客服来"}
+    ],
+    "expectations": {
+      "expected_route": "human_handoff",
+      "should_use_tools": [],
+      "should_escalate": true,
+      "expected_tone": "respectful",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "e2e_018",
+    "scenario": "多轮：投诉-追问-升级 完整链路",
+    "customer_id": "cust_001",
+    "conversation": [
+      {"role": "user", "message": "我的齿轮键盘 ord_001 用了两周就有按键失灵了"},
+      {"role": "user", "message": "客服说要检查，但是我这周就要用啊，能不能换新的？"}
+    ],
+    "expectations": {
+      "expected_route": "complaint",
+      "should_use_tools": ["order_lookup", "crm_lookup"],
+      "should_escalate": true,
+      "expected_tone": "empathy",
+      "forbidden": ["promise_refund_without_check"]
+    }
+  },
+  {
+    "id": "e2e_019",
+    "scenario": "产品咨询：带推荐对比",
+    "customer_id": "cust_005",
+    "conversation": [
+      {"role": "user", "message": "你们哪个型号的机械键盘性价比高？想换个新的"}
+    ],
+    "expectations": {
+      "expected_route": "product",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "helpful",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "e2e_020",
+    "scenario": "账户安全：账号注销申请（高风险）",
+    "customer_id": "cust_006",
+    "conversation": [
+      {"role": "user", "message": "我要注销我的账号，不想要了"}
+    ],
+    "expectations": {
+      "expected_route": "billing",
+      "should_use_tools": ["crm_lookup"],
+      "should_escalate": true,
+      "expected_tone": "careful",
+      "forbidden": ["approve_deletion_without_review"]
+    }
+  }
+]
