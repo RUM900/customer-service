@@ -14,32 +14,86 @@
 
 ## 架构概览
 
+### 1. 系统分层架构
+
+```mermaid
+graph TD
+    %% 全局样式
+    classDef c1 fill:#EBF5FB,stroke:#3498DB,stroke-width:1.5px,color:#1B4F72;
+    classDef c2 fill:#FEF9E7,stroke:#F39C12,stroke-width:1.5px,color:#7D6608;
+    classDef c3 fill:#F4ECF7,stroke:#9B59B6,stroke-width:1.5px,color:#512E5F;
+    classDef c4 fill:#E8F8F5,stroke:#1ABC9C,stroke-width:1.5px,color:#0E6251;
+
+    subgraph L1 ["🌐 接入与安全层 (FastAPI Layer)"]
+        direction LR
+        U["💻 客户端 / Web Chat / Admin"]:::c1
+        GW["⚡ FastAPI (REST + SSE 流式)"]:::c1
+        SEC["🔐 安全网关 (JWT/API-Key · 限流 · 提示注入检测 · 输入消毒)"]:::c1
+        U <--> GW <--> SEC
+    end
+
+    subgraph L2 ["🔀 编排与控制层 (LangGraph Orchestration)"]
+        direction LR
+        WF["⚙️ StateGraph 状态图 (10个图节点)"]:::c2
+        CP["💾 Checkpointer (MemorySaver / PostgresSaver)"]:::c2
+        HITL["🛑 HITL 机制 (interrupt 挂起 & resume 恢复)"]:::c2
+        WF <--> CP
+        WF <--> HITL
+    end
+
+    subgraph L3 ["🧠 多 Agent 协作层 (Multi-Agent Swarm)"]
+        direction LR
+        T1["🎯 Tier 1: Triage 分诊"]:::c3
+        T2["🛠️ Tier 2: 领域专家 (技术/账单/产品/客诉/FAQ)"]:::c3
+        T3["👔 Tier 3: Supervisor 主管裁决"]:::c3
+        T1 --> T2 --> T3
+    end
+
+    subgraph L4 ["🛠️ 工具与存储支撑层 (Tools & Infrastructure)"]
+        direction LR
+        TR["🧰 工具注册中心 (CRM / 订单 / 知识库 / 工单)"]:::c4
+        LLM["🔌 LLM 统一抽象 (DashScope / OpenAI / Claude)"]:::c4
+        DB["🗄️ 混合存储 (SQLAlchemy Async + SQLite/Postgres + ChromaDB)"]:::c4
+    end
+
+    L1 ==> L2
+    L2 ==> L3
+    L3 ==> L4
 ```
-Client → FastAPI → LangGraph Workflow
-                       │
-              ┌────────┴────────┐
-              ▼                 ▼
-         memory(摘要记忆)    Triage(分诊)
-                              │
-        ┌──────────┬──────────┼──────────┬──────────┐
-        ▼          ▼          ▼          ▼          ▼
-   faq_answer  Technical   Billing   Product   Complaint
-        │          │          │          │          │
-        │          └────┬─────┴────┬─────┘          │
-        └───────────────┼──────────┘                │
-                        ▼                           │
-                  tools(工具循环) ◄──┐               │
-                        │           │               │
-                        └───────────┘               │
-                        ▼                           │
-                   Supervisor ◄─────────────────────┘
-                  │     │      │
-        resolve/reject  │   escalate_to_human
-                  │     │      ▼
-                  ▼     ▼  human_handoff
-                 END    END     │
-                                ▼
-                               END
+
+### 2. LangGraph 状态图与工作流拓扑
+
+```mermaid
+flowchart TD
+    classDef startEnd fill:#27AE60,stroke:#1E8449,stroke-width:2px,color:#FFFFFF,rx:15px,ry:15px;
+    classDef nodeBase fill:#FFFFFF,stroke:#BDC3C7,stroke-width:1.5px,color:#2C3E50,rx:6px,ry:6px;
+    classDef triageStyle fill:#FEF9E7,stroke:#F39C12,stroke-width:1.5px,color:#7D6608,rx:6px,ry:6px;
+    classDef specStyle fill:#F4ECF7,stroke:#8E44AD,stroke-width:1.5px,color:#512E5F,rx:6px,ry:6px;
+    classDef supStyle fill:#FDEDEC,stroke:#E74C3C,stroke-width:1.5px,color:#78281F,rx:6px,ry:6px;
+    classDef toolStyle fill:#EBF5FB,stroke:#3498DB,stroke-width:1.5px,color:#1B4F72,rx:6px,ry:6px;
+
+    START(["🚀 START"]):::startEnd --> Memory["🧠 memory (超长上下文 LLM 摘要压缩)"]:::nodeBase
+    Memory --> Triage["🎯 triage (意图识别 / 情感分析 / 紧急度研判)"]:::triageStyle
+
+    %% 分诊条件路由
+    Triage -->|"FAQ 高置信 (≥0.75)"| FAQ["📚 faq_answer (知识库直答)"]:::specStyle
+    Triage -->|"专业领域咨询"| Specialists["🛠️ Specialist Agents<br/>[ Technical │ Billing │ Product │ Complaint ]"]:::specStyle
+    Triage -->|"需立即转人工"| Handoff["🤝 human_handoff (人工客服队列)"]:::supStyle
+
+    %% 工具回路
+    Specialists <-->|"工具执行回路"| Tools["⚙️ tools (CRM / 订单 / 向量检索 / 工单)"]:::toolStyle
+
+    %% 专家流转
+    FAQ --> END(["🏁 END"]):::startEnd
+    Specialists -->|"自主解决 (resolved)"| END
+    Specialists -->|"超权限 / 升级诉求"| Supervisor["👔 supervisor (升级裁决 & 跨域协调)"]:::supStyle
+
+    %% 主管流转与 HITL
+    Supervisor -->|"直接裁决 (resolve / reject)"| END
+    Supervisor -->|"转接人工"| Handoff
+    Supervisor -->|"高风险决策 (退款≥500元 / 销户)"| HITLGate{{"🛑 HITL 人机协同审核<br/>interrupt( ) 挂起执行"}}:::supStyle
+    HITLGate -.->|"管理员审批注入 (resume)"| Supervisor
+    Handoff --> END
 ```
 
 ### Agent 层级
@@ -55,25 +109,46 @@ Client → FastAPI → LangGraph Workflow
 
 > 模型分层策略：分诊/处理用快模型（成本优先），主管决策用强模型（效果优先）；可在管理后台热更新，无需重启。
 
-### 对话流程
+### 端到端协同与 HITL 流程示例
 
-```
-用户: "我订单 #12345 还没收到！"
-  │
-  ▼
-[Triage] → intent=ORDER_STATUS, sentiment=ANGRY, urgency=HIGH → route to complaint
-  │
-  ▼
-[Complaint] → CRM lookup → order status → 补偿方案
-  │  用户不接受 → 升级
-  ▼
-[Supervisor] → 审核 → require_human_review=true（退款≥500元）
-  │
-  ▼
-[HITL] 挂起执行 → 管理员在后台审批 → 恢复：批准退款+优惠券 → 回复
-  │
-  ▼
-[END] resolution="已退款+补偿100元优惠券"
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as 👤 客户 (User)
+    participant API as ⚡ FastAPI 网关
+    participant Triage as 🎯 Triage (Tier 1)
+    participant Complaint as 😡 Complaint (Tier 2)
+    participant Supervisor as 👔 Supervisor (Tier 3)
+    participant ReviewDB as 🗄️ 审核队列 (DB)
+    actor Admin as 🛡️ 管理员 (Admin)
+
+    User->>API: "我的订单 #12345 还没收到，要求退款600元！"
+    API->>Triage: 语义理解与分诊
+    Note over Triage: 意图=ORDER_STATUS<br/>情感=ANGRY, 紧急度=HIGH
+    Triage-->>Complaint: 路由至客诉专家
+
+    Complaint->>Complaint: 调用 CRM/订单工具，诊断延误超期
+    Note over Complaint: 退款金额 ¥600 超出 Tier 2 权限
+    Complaint-->>Supervisor: 升级至主管介入
+
+    Supervisor->>Supervisor: 裁决全额退款 + 100元优惠券<br/>触发规则: 退款≥500元 需人工审批
+    
+    rect rgb(254, 249, 231)
+        Note over Supervisor,ReviewDB: HITL 挂起流程 (Human-in-the-Loop)
+        Supervisor->>ReviewDB: add_review(thread_id, 审核详情)
+        Supervisor--xAPI: interrupt() 抛出中断，保存当前 State 快照
+    end
+
+    Admin->>ReviewDB: GET /admin/knowledge/reviews (后台查看待审单)
+    Admin->>API: POST /reviews/{thread_id}/approve (点击批准)
+    
+    rect rgb(235, 245, 251)
+        Note over API,Supervisor: 图恢复与结果交付
+        API->>Supervisor: Command(resume={"approved": True}) 恢复挂起点
+    end
+
+    Supervisor-->>API: 生成终局答复 (已退款 + 补偿券)
+    API-->>User: "已为您办理全额退款，并赠送100元优惠券！"
 ```
 
 ## 快速启动
