@@ -67,6 +67,20 @@ async def chat(
         clean_message = sanitize_user_input(req.message)
         injection_result = detect_prompt_injection(clean_message)
 
+        # 高危提示注入阻断
+        if injection_result.get("should_block"):
+            logger.warning(f"高危 Prompt Injection 已阻断: session={session_id}")
+            return ChatResponse(
+                session_id=session_id,
+                reply="抱歉，您的输入包含无法处理的内容，请重新描述您的问题。",
+                status="active",
+                errors=[{
+                    "type": "security_blocked",
+                    "message": "检测到高风险输入模式，请求已拦截",
+                    "risk_level": "high",
+                }],
+            )
+
         store = get_storage()
 
         # 获取历史消息

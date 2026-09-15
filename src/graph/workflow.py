@@ -376,7 +376,7 @@ async def specialist_node(state: dict, agent_name: str) -> dict:
         agent = _get_agent(agent_name)
 
         # 构造增强的 user_message（如果有工具执行结果）
-        enhanced_message = user_message
+        enhanced_message = f"<user_input>\n{user_message}\n</user_input>"
         if tool_results:
             results_text = "\n".join(
                 f"- **{r.get('tool', 'unknown')}**: {r.get('result', r)}"
@@ -384,7 +384,7 @@ async def specialist_node(state: dict, agent_name: str) -> dict:
             )
             executed = {r.get('tool', '') for r in tool_results}
             enhanced_message = (
-                f"{user_message}\n\n"
+                f"<user_input>\n{user_message}\n</user_input>\n\n"
                 f"[系统提示] 以下工具已经被调用并返回结果，请直接使用这些数据回复客户，"
                 f"不要再请求调用这些工具: {', '.join(executed)}。"
                 f"如果数据已足够回答，请务必将 tools_to_use 设为空数组 []，不要重复请求已执行过的工具。\n"
@@ -1024,51 +1024,54 @@ def _messages_to_history(messages: list[dict]) -> list[dict]:
 
 
 async def _execute_tool_with_auto_args(tool, tool_name: str, user_message: str, state: dict) -> dict:
-    """根据工具类型自动推断参数并执行"""
+    """根据工具类型自动推断参数并执行（优先结构化输出参数，正则仅做辅助兜底）"""
     # CRM 查询 — 从消息中提取客户 ID 或使用 state 中的
     if tool_name == "crm_lookup":
         customer_id = state.get("customer_id", "")
         if not customer_id:
-            match = re.search(r'cust_[A-Za-z0-9_]+', user_message)
+            match = re.search(r'cust_[A-Za-z0-9_]{1,64}', user_message)
             customer_id = match.group(0) if match else ""
         if not customer_id:
-            return {"error": "无法识别客户 ID，请提供有效的客户标识", "found": False}
+            return {"error": "missing_args", "found": False, "clarify": "请提供您的客户 ID（如 cust_xxx）以便为您查询。"}
         return await tool.execute(customer_id=customer_id)
 
     # 订单查询 — 优先按订单号，其次回落当前客户（查全部订单）
     elif tool_name == "order_lookup":
-        match = re.search(r'ord_[A-Za-z0-9_]+', user_message)
+        match = re.search(r'ord_[A-Za-z0-9_]{1,64}', user_message)
         order_id = match.group(0) if match else ""
         if order_id:
             return await tool.execute(order_id=order_id)
         customer_id = state.get("customer_id", "")
         if customer_id:
             return await tool.execute(customer_id=customer_id)
-        return {"error": "无法识别订单，请提供订单号或绑定客户", "found": False}
+        return {"error": "missing_args", "found": False, "clarify": "请提供有效的订单号（如 ord_xxx）以便为您查询。"}
 
     # 知识库搜索 — 直接用客户消息
     elif tool_name == "knowledge_search":
-        return await tool.execute(query=user_message)
+        # 移除数据定界符干扰
+        clean_query = re.sub(r'</?user_input>', '', user_message).strip()
+        return await tool.execute(query=clean_query)
 
     # 工单创建 — 需要 session_id
     elif tool_name == "ticket_create":
+        clean_desc = re.sub(r'</?user_input>', '', user_message).strip()
         return await tool.execute(
             session_id=state.get("session_id", "unknown"),
             customer_id=state.get("customer_id", ""),
-            subject=user_message[:100],
-            description=user_message[:500],
+            subject=clean_desc[:100],
+            description=clean_desc[:500],
         )
 
     # 工单查询 — 优先按工单号，其次回落当前客户
     elif tool_name == "ticket_query":
-        match = re.search(r'ticket_[A-Za-z0-9_]+', user_message)
+        match = re.search(r'ticket_[A-Za-z0-9_]{1,64}', user_message)
         ticket_id = match.group(0) if match else ""
         if ticket_id:
             return await tool.execute(ticket_id=ticket_id)
         customer_id = state.get("customer_id", "")
         if customer_id:
             return await tool.execute(customer_id=customer_id)
-        return {"error": "无法识别工单，请提供工单号或绑定客户", "found": False}
+        return {"error": "missing_args", "found": False, "clarify": "请提供有效的工单号（如 ticket_xxx）以便为您查询。"}
 
     # 默认
     else:

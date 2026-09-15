@@ -12,6 +12,7 @@ API 认证与鉴权
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
+import secrets
 
 import jwt as pyjwt
 from fastapi import HTTPException, Request, Depends
@@ -20,6 +21,24 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import config
 
 logger = logging.getLogger(__name__)
+
+# ============================================================
+# 启动时安全检查
+# ============================================================
+
+def _check_jwt_secret_safety():
+    """生产环境禁止使用弱密钥"""
+    import os
+    env = os.getenv("ENVIRONMENT", "development").lower()
+    weak_secrets = {"dev-secret-change-me", "change-me-in-prod", "secret", "test"}
+    if env == "production" and config.JWT_SECRET in weak_secrets:
+        raise RuntimeError(
+            "生产环境检测到弱 JWT_SECRET！"
+            "请设置安全的 JWT_SECRET 环境变量（推荐使用 openssl rand -hex 32 生成）。"
+        )
+
+# 模块加载时检查
+_check_jwt_secret_safety()
 
 # ============================================================
 # JWT 签发与校验
@@ -140,7 +159,7 @@ async def require_agent(request: Request) -> str:
             headers={"WWW-Authenticate": "ApiKey"},
         )
 
-    if provided_key != config.API_KEY:
+    if not secrets.compare_digest(provided_key.encode(), config.API_KEY.encode()):
         logger.warning(f"无效的 API Key 尝试: {provided_key[:8]}... (IP: {request.client.host if request.client else 'unknown'})")
         raise HTTPException(
             status_code=401,
@@ -197,7 +216,7 @@ async def require_admin(request: Request) -> str:
             headers={"WWW-Authenticate": "ApiKey"},
         )
 
-    if provided_key != expected_admin_key:
+    if not secrets.compare_digest(provided_key.encode(), expected_admin_key.encode()):
         logger.warning(f"无效的 Admin API Key 尝试: {provided_key[:8]}... (IP: {request.client.host if request.client else 'unknown'})")
         raise HTTPException(
             status_code=401,

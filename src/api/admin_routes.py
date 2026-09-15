@@ -10,7 +10,7 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, Request
 from pydantic import BaseModel, Field
 
 from src.api.deps import get_knowledge_store
@@ -21,6 +21,28 @@ from src.models.conversation import Message, MessageRole
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/knowledge", tags=["知识库管理"])
+
+
+# ============================================================
+# 审计日志辅助
+# ============================================================
+
+def _audit_log(request, action: str, thread_id: str, extra: dict = None):
+    """统一管理端审计日志（含操作人、IP）"""
+    from src.api.auth import get_bearer_token, decode_token
+
+    actor = "api_key"
+    token = get_bearer_token(request)
+    if token:
+        payload = decode_token(token)
+        if payload:
+            actor = payload.get("username", "jwt_user")
+
+    ip = request.client.host if request.client else "unknown"
+    logger.info(
+        "AUDIT: action=%s thread=%s actor=%s ip=%s extra=%s",
+        action, thread_id, actor, ip, extra or {},
+    )
 
 
 # ============================================================
@@ -314,6 +336,7 @@ async def approve_review(
     thread_id: str,
     note: str = "",
     assignee: str = "",
+    request: Request = None,
     _auth: str = Depends(require_admin),
 ):
     """
@@ -327,6 +350,7 @@ async def approve_review(
     if review is None:
         raise HTTPException(status_code=404, detail=f"未找到待审核案例: {thread_id}")
 
+    _audit_log(request, "approve", thread_id, {"note": note, "assignee": assignee})
     # 转人工审核：图未暂停，无需恢复执行，只需流转工单
     if review.get("review_type") == "human_handoff":
         ticket_id = review.get("ticket_id")
@@ -372,7 +396,7 @@ async def approve_review(
     "/reviews/{thread_id}/reject",
     summary="驳回审核",
 )
-async def reject_review(thread_id: str, reason: str = "", _auth: str = Depends(require_admin)):
+async def reject_review(thread_id: str, reason: str = "", request: Request = None, _auth: str = Depends(require_admin)):
     """
     驳回人工审核案例
 
@@ -384,6 +408,7 @@ async def reject_review(thread_id: str, reason: str = "", _auth: str = Depends(r
     if review is None:
         raise HTTPException(status_code=404, detail=f"未找到待审核案例: {thread_id}")
 
+    _audit_log(request, "reject", thread_id, {"reason": reason})
     # 转人工审核：图未暂停，无需恢复执行，只需关闭工单
     if review.get("review_type") == "human_handoff":
         ticket_id = review.get("ticket_id")

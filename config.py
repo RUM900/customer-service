@@ -12,6 +12,13 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
 # ============================================================
+# 运行环境
+# ============================================================
+
+# development | production（生产环境强制 PostgresSaver / 强 JWT 密钥）
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
+
+# ============================================================
 # LLM Provider 配置
 # ============================================================
 

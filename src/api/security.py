@@ -146,6 +146,7 @@ def detect_prompt_injection(text: str) -> dict:
         "suspicious": len(matched) > 0,
         "matched_patterns": matched,
         "risk_level": risk_level,
+        "should_block": risk_level == "high",  # 高危建议阻断
     }
 
 

@@ -26,7 +26,11 @@ services:
     ports:
       - "8000:8000"
     environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/customer_service
+      - CHECKPOINTER_BACKEND=${CHECKPOINTER_BACKEND:-postgres}
+      - CHECKPOINTER_DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/customer_service
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-prod}
       - LLM_PROVIDER=${LLM_PROVIDER:-dashscope}
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}

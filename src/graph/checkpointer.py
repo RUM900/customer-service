@@ -26,16 +26,27 @@ async def get_checkpointer() -> BaseCheckpointSaver:
 
     - 开发环境: MemorySaver（内存，重启丢失）
     - 生产环境: PostgresSaver（持久化到 PostgreSQL）
+      生产环境不允许使用 memory，启动时拦截报错。
 
     Returns:
         BaseCheckpointSaver 实例
     """
+    import os
+
     global _checkpointer
 
     if _checkpointer is not None:
         return _checkpointer
 
     backend = config.CHECKPOINTER_BACKEND.lower()
+    env = os.getenv("ENVIRONMENT", "development").lower()
+
+    # 生产环境不允许使用 memory（HITL 跨进程恢复必须持久化）
+    if env == "production" and backend == "memory":
+        raise RuntimeError(
+            "生产环境禁止使用 MemorySaver（HITL 跨进程恢复依赖持久化检查点）。"
+            "请设置 CHECKPOINTER_BACKEND=postgres 并配置 CHECKPOINTER_DATABASE_URL。"
+        )
 
     if backend == "memory":
         logger.info("使用 MemorySaver（内存模式，重启后状态丢失）")

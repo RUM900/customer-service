@@ -35,6 +35,8 @@ class StorageProvider:
 
     def __init__(self):
         self._db_available: Optional[bool] = None
+        self._db_fail_count: int = 0          # 连续失败计数
+        self._db_max_skip: int = 5            # 连续失败 N 次后尝试恢复探测
         # 内存降级存储
         self._memory_sessions: dict[str, dict] = {}
         self._memory_messages: dict[str, list[dict]] = {}
@@ -45,16 +47,28 @@ class StorageProvider:
     # ----------------------------------------------------------
 
     async def _ensure_db(self):
-        """尝试获取 DB session，失败返回 None"""
+        """尝试获取 DB session，失败返回 None
+
+        不会永久禁用 DB：连续失败超过阈值后每次仍会重新探测，
+        允许 DB 短暂故障后自动恢复。
+        """
+        # 连续失败期间跳过部分请求，降低探测频率
         if self._db_available is False:
-            return None
+            self._db_fail_count += 1
+            if self._db_fail_count % self._db_max_skip != 0:
+                return None
+            # 每隔 N 次尝试重新探测
+            logger.info("DB 故障恢复探测中...")
         try:
             from src.memory.database import get_session_factory
             from sqlalchemy import text
             factory = get_session_factory()
             session = factory()
             await session.execute(text("SELECT 1"))
+            if self._db_available is False:
+                logger.info("DB 已恢复连接")
             self._db_available = True
+            self._db_fail_count = 0
             return session
         except Exception:
             if 'session' in locals():
