@@ -133,19 +133,15 @@ sequenceDiagram
 
     Supervisor->>Supervisor: 裁决全额退款 + 100元优惠券<br/>触发规则: 退款≥500元 需人工审批
     
-    rect rgb(254, 249, 231)
-        Note over Supervisor,ReviewDB: HITL 挂起流程 (Human-in-the-Loop)
-        Supervisor->>ReviewDB: add_review(thread_id, 审核详情)
-        Supervisor--xAPI: interrupt() 抛出中断，保存当前 State 快照
-    end
+    Note over Supervisor,ReviewDB: 🛑【HITL 挂起】高风险决策进入人机协同审核
+    Supervisor->>ReviewDB: add_review(thread_id, 审核详情)
+    Supervisor--xAPI: interrupt() 挂起执行并保存 State 快照
 
     Admin->>ReviewDB: GET /admin/knowledge/reviews (后台查看待审单)
     Admin->>API: POST /reviews/{thread_id}/approve (点击批准)
     
-    rect rgb(235, 245, 251)
-        Note over API,Supervisor: 图恢复与结果交付
-        API->>Supervisor: Command(resume={"approved": True}) 恢复挂起点
-    end
+    Note over API,Supervisor: 🔄【图恢复与结果交付】注入审核指令并继续执行
+    API->>Supervisor: Command(resume={"approved": True}) 恢复执行
 
     Supervisor-->>API: 生成终局答复 (已退款 + 补偿券)
     API-->>User: "已为您办理全额退款，并赠送100元优惠券！"
