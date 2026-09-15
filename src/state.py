@@ -30,6 +30,7 @@ class CustomerServiceState(TypedDict, total=False):
     # === 分诊 ===
     triage_result: Optional[dict]
     routing_decision: Optional[dict]
+    secondary_intents: list[str]   # 复合意图拆解出的次要诉求
 
     # === Specialist 响应 ===
     specialist_response: Optional[dict]
@@ -95,6 +96,7 @@ def create_initial_state(
         "memory_summary": "",
         "triage_result": None,
         "routing_decision": None,
+        "secondary_intents": [],
         "specialist_response": None,
         "specialist_agent": "",
         "escalation_count": 0,

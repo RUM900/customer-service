@@ -85,6 +85,32 @@ def _get_agent(name: str):
 # 客户上下文
 # ============================================================
 
+def _soothe_prefix(triage: dict, customer_ctx: dict = None) -> str:
+    """
+    客户情绪主动降温：当识别到 ANGRY / NEGATIVE 且紧急度较高时，
+    生成拟人化安抚前缀，缓解客户情绪。
+    """
+    sentiment = (triage or {}).get("sentiment")
+    urgency = (triage or {}).get("urgency")
+    name = ""
+    if customer_ctx and customer_ctx.get("name"):
+        name = customer_ctx["name"]
+
+    if sentiment not in ("angry", "negative"):
+        return ""
+
+    prefix = ""
+    if urgency in ("high", "critical"):
+        prefix = (
+            f"{name}您别着急，我已经明白您遇到的问题了，正在为您加急处理。"
+        )
+    else:
+        prefix = (
+            f"{name}非常抱歉给您带来不好的体验，我已经了解您的情况，会尽力帮您解决。"
+        )
+    return prefix
+
+
 def _fmt_customer_context(ctx: dict) -> str:
     """客户画像 → 提示文本"""
     if not ctx:
@@ -207,6 +233,12 @@ async def triage_node(state: dict) -> dict:
         # 构建路由决策
         routing = _build_routing_decision(result)
 
+        # 复合意图拆解：记录次要诉求（供 Specialist 回复时提及）
+        secondary_intents = [
+            s.value if hasattr(s, "value") else str(s)
+            for s in (result.secondary_intents or [])
+        ]
+
         return {
             "triage_result": result.model_dump(),
             "routing_decision": routing,
@@ -214,6 +246,7 @@ async def triage_node(state: dict) -> dict:
             "current_tier": Tier.TRIAGE.value,
             "status": ConversationStatus.ACTIVE.value,
             "customer_context": customer_context,
+            "secondary_intents": secondary_intents,
         }
 
     except Exception as e:
@@ -312,6 +345,11 @@ async def faq_answer_node(state: dict) -> dict:
             history=history,
         )
 
+        # 情绪主动降温：ANGRY/负面时加安抚前缀
+        soothe = _soothe_prefix(triage, state.get("customer_context") or {})
+        if soothe:
+            reply = soothe + reply
+
         assistant_msg = Message(
             role=MessageRole.ASSISTANT,
             content=reply,
@@ -396,6 +434,15 @@ async def specialist_node(state: dict, agent_name: str) -> dict:
         if customer_ctx:
             enhanced_message = f"[客户信息] {customer_ctx}\n\n{enhanced_message}"
 
+        # 复合意图提醒：客户还有其他诉求，需在回复中确认或引导
+        secondary = state.get("secondary_intents") or []
+        if secondary:
+            sec_text = ", ".join(str(s) for s in secondary)
+            enhanced_message += (
+                f"\n\n[系统提示] 客户的消息中可能还包含次要诉求: {sec_text}。"
+                f"如果本次无法一并处理，请在回复中主动确认或引导客户继续描述，不要忽略。"
+            )
+
         # Context 窗口管理
         raw_history = state.get("messages", [])
         context = prepare_context(
@@ -431,9 +478,15 @@ async def specialist_node(state: dict, agent_name: str) -> dict:
         if agent_name not in coordinated:
             result["coordinated_agents"] = [agent_name]
 
+        # 情绪主动降温：ANGRY/负面时加安抚前缀
+        soothe = _soothe_prefix(triage, state.get("customer_context") or {})
+        final_reply = response.reply_to_customer
+        if soothe and response.reply_to_customer:
+            final_reply = soothe + response.reply_to_customer
+
         if response.is_resolved:
             result["status"] = ConversationStatus.RESOLVED.value
-            result["final_reply"] = response.reply_to_customer
+            result["final_reply"] = final_reply
             result["resolution"] = Resolution(
                 resolution_type=ResolutionType.AGENT_RESOLVED,
                 summary=response.diagnosis,
@@ -445,11 +498,11 @@ async def specialist_node(state: dict, agent_name: str) -> dict:
         elif response.needs_escalation:
             result["escalation_reason"] = response.escalation_reason
             result["escalation_count"] = state.get("escalation_count", 0) + 1
-            result["final_reply"] = response.reply_to_customer
+            result["final_reply"] = final_reply
 
         else:
             # 追问/澄清场景，或者工具调用后未解决
-            result["final_reply"] = response.reply_to_customer
+            result["final_reply"] = final_reply
 
         return result
 

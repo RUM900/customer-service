@@ -313,6 +313,63 @@ class TestModels:
         json_str = json.dumps(result.model_dump(), ensure_ascii=False)
         assert "faq" in json_str
 
+    def test_secondary_intents_supported(self):
+        """TriageResult 支持复合意图 secondary_intents"""
+        result = TriageResult(
+            primary_intent=IntentType.COMPLAINT,
+            secondary_intents=[IntentType.TECHNICAL_SUPPORT, IntentType.REFUND_REQUEST],
+            intent_confidence=0.88,
+            sentiment=Sentiment.ANGRY,
+            urgency=Urgency.HIGH,
+            recommended_agent="complaint",
+        )
+        assert len(result.secondary_intents) == 2
+        assert IntentType.TECHNICAL_SUPPORT in result.secondary_intents
+        d = result.model_dump()
+        assert d["secondary_intents"] == ["technical_support", "refund_request"]
+
+
+# ============================================================
+# 情绪主动降温（Phase 3）
+# ============================================================
+
+class TestSoothePrefix:
+    """客户情绪降温话术测试"""
+
+    def _call(self, sentiment="neutral", urgency="low", customer_ctx=None):
+        from src.graph.workflow import _soothe_prefix
+        triage = {"sentiment": sentiment, "urgency": urgency}
+        return _soothe_prefix(triage, customer_ctx or {})
+
+    def test_angry_high_urgency(self):
+        """愤怒 + 高紧急度 → 生成加急安抚前缀"""
+        prefix = self._call("angry", "high", {"name": "张三"})
+        assert prefix != ""
+        assert "着急" in prefix
+        assert "张三" in prefix
+
+    def test_negative_low_urgency(self):
+        """负面 + 低紧急度 → 生成道歉安抚前缀"""
+        prefix = self._call("negative", "low")
+        assert prefix != ""
+        assert "抱歉" in prefix
+
+    def test_neutral_no_prefix(self):
+        """中性情绪 → 不生成安抚前缀"""
+        prefix = self._call("neutral", "low")
+        assert prefix == ""
+
+    def test_positive_no_prefix(self):
+        """正面情绪 → 不生成安抚前缀"""
+        prefix = self._call("positive", "medium")
+        assert prefix == ""
+
+    def test_critical_urgency(self):
+        """critical 紧急度触发加急话术"""
+        prefix = self._call("angry", "critical")
+        assert prefix != ""
+        assert "加急" in prefix or "着急" in prefix
+
 
 # ============================================================
 # 工具测试

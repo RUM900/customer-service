@@ -402,17 +402,43 @@ async function loadReviews() {
   try {
     var data = await api('/admin/knowledge/reviews');
     var html = '';
-    if (!data.reviews.length) html = '<tr><td colspan="5" class="empty">暂无待审核案例</td></tr>';
+    if (!data.reviews.length) html = '<tr><td colspan="6" class="empty">暂无待审核案例</td></tr>';
     data.reviews.forEach(function(r) {
       var items = (r.review_items || []).map(function(i) { return '<span class="tag">' + i + '</span>'; }).join('');
-      html += '<tr><td><span class="tag tag-' + (r.review_type === 'human_handoff' ? 'handoff' : 'supervisor') + '">' + (REVIEW_LABELS[r.review_type] || r.review_type) + '</span></td>' +
+      var typeTag = '<span class="tag tag-' + (r.review_type === 'human_handoff' ? 'handoff' : 'supervisor') + '">' + (REVIEW_LABELS[r.review_type] || r.review_type) + '</span>';
+      var ticketInfo = r.ticket_id ? '<br><span style="color:#1565c0;font-size:12px">工单: ' + r.ticket_id + '</span>' : '';
+      var handoffInfo = (r.review_type === 'human_handoff' && r.handoff_summary) ? '<br><span style="color:#666;font-size:12px">摘要: ' + escapeHtml(r.handoff_summary.slice(0, 80)) + '</span>' : '';
+      html += '<tr><td>' + typeTag + ticketInfo + '</td>' +
         '<td>' + (r.session_id || r.thread_id || '-').slice(0, 20) + '</td>' +
-        '<td>' + (r.message || '') + '</td><td>' + items + '</td>' +
-        '<td><button class="btn btn-secondary btn-sm" onclick="resolveReview(\'' + r.thread_id + '\',\'approve\')">批准</button> ' +
+        '<td>' + escapeHtml(r.message || '') + handoffInfo + '</td><td>' + items + '</td>' +
+        '<td><button class="btn btn-secondary btn-sm" onclick="showReviewDetail(\'' + r.thread_id + '\')">查看</button></td>' +
+        '<td style="white-space:nowrap"><button class="btn btn-secondary btn-sm" onclick="resolveReview(\'' + r.thread_id + '\',\'approve\')">批准</button> ' +
         '<button class="btn btn-danger btn-sm" onclick="resolveReview(\'' + r.thread_id + '\',\'reject\')">驳回</button></td></tr>';
     });
     document.getElementById('reviewsBody').innerHTML = html;
   } catch (e) { showMsg('加载审核队列失败: ' + e.message, true); }
+}
+
+function escapeHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function showReviewDetail(threadId) {
+  try {
+    var r = await api('/admin/knowledge/reviews/' + threadId);
+    var decision = r.decision || {};
+    var lines = [];
+    if (decision.action) lines.push('决策动作: ' + decision.action);
+    if (decision.reasoning) lines.push('决策理由: ' + decision.reasoning);
+    if (decision.final_solution) lines.push('终局方案: ' + decision.final_solution);
+    if (decision.compensation) lines.push('补偿方案: ' + decision.compensation);
+    if (r.reviewer_note) lines.push('审核备注: ' + r.reviewer_note);
+    if (r.reviewed_at) lines.push('审核时间: ' + r.reviewed_at);
+    if (r.ticket_id) lines.push('关联工单: ' + r.ticket_id);
+    var detail = lines.length ? lines.join('\n') : '（无额外详情）';
+    alert(detail);
+  } catch (e) { showMsg('获取详情失败: ' + e.message, true); }
 }
 
 async function resolveReview(threadId, action) {
