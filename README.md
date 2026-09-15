@@ -5,12 +5,15 @@
 ## 功能特性
 
 - 🧠 **三层 Agent 协作**：Triage 分诊 → 4 个 Specialist 专业处理 → Supervisor 升级审核 → 人工转接，完整闭环
-- 🔀 **LangGraph 编排**：10 个图节点（含会话记忆摘要、工具执行循环）+ 条件路由 + Checkpointer 状态持久化
-- 🔌 **LLM 供应商无关**：DashScope / OpenAI / Claude 三 Provider 可插拔，支持结构化输出 + 自动重试
-- 📚 **RAG 知识问答**：ChromaDB 向量检索，高置信度（≥0.75）直答 FAQ，低置信回落 LLM
-- 🛠 **HITL 人工审核**：高风险决策（退款 ≥500 元等）自动挂起，等待人工审批后恢复
-- 🖥 **管理后台**：在线管理模型配置（热更新）、FAQ、知识库、人工审核队列
-- 🔐 **安全防护**：JWT 认证、API Key 双轨鉴权、Prompt Injection 检测、输入消毒、限流
+- 🔀 **LangGraph 编排**：10 个图节点（含会话记忆摘要、工具执行循环）+ 条件路由 + Checkpointer 状态持久化 + **HITL interrupt/resume 人机协同**
+- 🛠 **HITL 人工审核闭环**：高风险决策（退款 ≥500 元等）自动挂起 → 管理员审批 → **终局回复回写会话** → 202/轮询双通道交付
+- 🤝 **坐席工作台（Agent Workbench）**：三栏工作台（会话队列 / 客户会话流 / AI 副驾驶），人工回复不重跑图、SSE 实时订阅、Copilot 一键采纳
+- 🔌 **LLM 供应商无关**：DashScope / OpenAI / Claude 三 Provider 可插拔，结构化输出 + 自动重试 + 调用遥测
+- 📚 **RAG 知识问答**：ChromaDB 向量检索，高置信度（≥0.75）直答 FAQ，低置信回落 LLM，含知识盲区自动聚类
+- 🧮 **复合意图拆解 + 情绪主动降温**：多诉求拆解、ANGRY 客户安抚话术
+- 🖥 **管理后台**：模型配置热更新、FAQ/知识库管理、人工审核队列、知识盲区建议清单、矛盾政策检测、坐席 Copilot
+- 🔐 **安全防护**：JWT/API-Key 双轨鉴权 + staff 角色体系、Prompt Injection 检测与阻断、输入消毒、时序安全比较、限流、HITL 操作审计
+- 🏭 **生产就绪**：生产环境强制 PostgresSaver、DB 故障自动降级与恢复探测、连接池管理
 
 ## 架构概览
 
@@ -26,9 +29,9 @@ graph TD
 
     subgraph L1 ["🌐 接入与安全层 (FastAPI Layer)"]
         direction LR
-        U["💻 客户端 / Web Chat / Admin"]:::c1
-        GW["⚡ FastAPI (REST + SSE 流式)"]:::c1
-        SEC["🔐 安全网关 (JWT/API-Key · 限流 · 提示注入检测 · 输入消毒)"]:::c1
+        U["💻 客户端 Chat / 管理后台 / 坐席工作台"]:::c1
+        GW["⚡ FastAPI (REST + SSE 流式 + 实时订阅)"]:::c1
+        SEC["🔐 安全网关 (JWT/API-Key · staff 角色 · 限流 · 注入检测)"]:::c1
         U <--> GW <--> SEC
     end
 
@@ -177,6 +180,8 @@ cp .env.example .env
 ```
 
 > 开发环境默认使用 SQLite（零配置），无需安装 PostgreSQL；`DASHSCOPE_API_KEY` 同时用于 FAQ 向量嵌入（text-embedding-v1）。
+> 生产环境需设置 `ENVIRONMENT=production` 并强制 `CHECKPOINTER_BACKEND=postgres`（HITL 跨进程恢复依赖）。
+> 默认账号：管理员 `admin/admin123`、坐席 `agent/agent123`（可用 `AGENT_USERNAME/AGENT_PASSWORD` 修改）。
 
 ### 3. 启动服务
 
@@ -347,29 +352,32 @@ customer-service/
 ├── Makefile                  # run / test / clean 快捷命令
 ├── src/
 │   ├── main.py               # FastAPI 入口 + 生命周期管理
-│   ├── state.py              # LangGraph 状态定义（TypedDict + reducer）
+│   ├── state.py              # LangGraph 状态定义（TypedDict + reducer + 复合意图/协调字段）
 │   ├── llm/                  # LLM 抽象层（3个 Provider + 工厂 + 重试）
-│   ├── models/               # Pydantic 数据模型
+│   ├── models/               # Pydantic 数据模型（含 UserRole admin/agent/customer）
 │   ├── agents/               # Agent 层（6个 Agent，继承 BaseAgent）
 │   ├── tools/                # 工具注册中心（crm/order/knowledge/ticket）
-│   ├── graph/                # LangGraph 工作流（10 节点 + 条件路由 + checkpointer）
-│   ├── memory/               # 持久化（会话/消息/工单/FAQ/审核/模型配置）
+│   ├── graph/                # LangGraph 工作流（10 节点 + 条件路由 + checkpointer + HITL）
+│   ├── memory/               # 持久化（会话/消息/工单/FAQ/审核/盲区/模型配置）
 │   ├── knowledge/            # 知识库（解析→分块→向量化→检索 流水线）
-│   ├── api/                  # FastAPI 路由/认证/安全/存储/审核队列
-│   ├── static/               # Web UI（chat.html 聊天 / admin.html 管理后台）
+│   ├── api/                  # FastAPI 路由（客户端/管理端/**坐席工作台**/认证/安全/盲区闭环）
+│   ├── static/               # Web UI（chat.html 聊天 / admin.html 后台 / agent.html 坐席工作台）
 │   └── utils/                # 上下文窗口管理工具
-├── migrations/               # Alembic 数据库迁移
-├── tests/                    # 90+ 个自动化测试 + evals/ 评估集（85 条端到端场景）
+├── migrations/               # Alembic 数据库迁移（含 reviews 增强 & knowledge_gaps 表）
+├── tests/                    # 113 个自动化测试 + evals/ 评估集（85 条端到端场景）
 └── data/                     # FAQ 示例数据（faq_samples.json / sample_policy.md）
 ```
 
 ## 运行测试
 
 ```bash
-pytest tests/ -v               # 全部测试（90+ 个）
+pytest tests/ -v               # 全部测试（113 个）
 pytest tests/test_llm.py -v    # LLM 层测试
 pytest tests/test_workflow.py -v  # 工作流集成测试
-pytest tests/test_api.py -v    # API 集成测试
+pytest tests/test_api.py -v    # API 集成测试（含 HITL 202/审核状态）
+pytest tests/test_agent_workbench.py -v  # 坐席工作台（角色鉴权/回复/SSE）
+pytest tests/test_phase2_security.py -v  # 安全基线（JWT/注入/存储恢复）
+pytest tests/test_phase4_flywheel.py -v  # 运营闭环（盲区/矛盾检测/Copilot）
 pytest tests/test_telemetry.py -v  # 可观测性埋点测试
 ```
 
