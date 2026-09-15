@@ -122,7 +122,7 @@ sequenceDiagram
     participant ReviewDB as 🗄️ 审核队列 (DB)
     actor Admin as 🛡️ 管理员 (Admin)
 
-    User->>API: "我的订单 #12345 还没收到，要求退款600元！"
+    User->>API: 我的订单（单号 12345）还没收到，要求退款600元！
     API->>Triage: 语义理解与分诊
     Note over Triage: 意图=ORDER_STATUS<br/>情感=ANGRY, 紧急度=HIGH
     Triage-->>Complaint: 路由至客诉专家
