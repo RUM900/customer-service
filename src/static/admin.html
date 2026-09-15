@@ -87,6 +87,8 @@ textarea { min-height: 70px; resize: vertical; }
       <button class="nav-item" data-tab="faqs" onclick="switchTab('faqs')">📚 FAQ 管理</button>
       <button class="nav-item" data-tab="docs" onclick="switchTab('docs')">📄 知识库文档</button>
       <button class="nav-item" data-tab="reviews" onclick="switchTab('reviews')">🛡️ 人工审核队列</button>
+      <button class="nav-item" data-tab="gaps" onclick="switchTab('gaps')">📊 知识盲区</button>
+      <button class="nav-item" data-tab="copilot" onclick="switchTab('copilot')">🤝 坐席 Copilot</button>
     </div>
     <div class="sidebar-footer">
       <span id="userName"></span>
@@ -164,9 +166,42 @@ textarea { min-height: 70px; resize: vertical; }
       <div class="page-header"><h3>人工审核队列</h3><span class="desc">Supervisor 高风险决策 + 客户转人工申请</span></div>
       <div class="card">
         <table>
-          <thead><tr><th>类型</th><th>会话</th><th>内容</th><th>审核项</th><th style="width:180px">操作</th></tr></thead>
+          <thead><tr><th>类型</th><th>会话</th><th>内容</th><th>审核项</th><th style="width:80px">详情</th><th style="width:180px">操作</th></tr></thead>
           <tbody id="reviewsBody"></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- 知识盲区（运营闭环） -->
+    <div class="tab-page" id="tab-gaps" style="display:none">
+      <div class="page-header"><h3>知识盲区建议清单</h3><span class="desc">FAQ 未命中 / 转人工的高频问题 → 建议补充为 FAQ</span></div>
+      <div class="card">
+        <div class="form-row">
+          <div style="flex:0 0 auto"><label>最少出现次数</label><input type="number" id="gapMinCount" value="2" style="width:80px"></div>
+          <div style="align-self:end"><button class="btn btn-secondary" onclick="loadGaps()">重新分析</button></div>
+        </div>
+        <table>
+          <thead><tr><th>高频问题（规范化）</th><th>次数</th><th>来源链路</th><th>建议 FAQ</th></tr></thead>
+          <tbody id="gapsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 坐席 Copilot -->
+    <div class="tab-page" id="tab-copilot" style="display:none">
+      <div class="page-header"><h3>坐席 Copilot</h3><span class="desc">人工聊天时输入客户诉求，AI 实时推荐话术</span></div>
+      <div class="card">
+        <div class="form-row">
+          <div><label>会话 ID</label><input type="text" id="coSession" placeholder="sess_xxx"></div>
+        </div>
+        <div class="form-row">
+          <div><label>客户最新消息</label><textarea id="coMessage" placeholder="客户说..."></textarea></div>
+        </div>
+        <div class="form-row">
+          <div><label>坐席草稿（可选）</label><textarea id="coDraft" placeholder="自己写了一半的内容..."></textarea></div>
+        </div>
+        <button class="btn btn-primary" onclick="runCopilot()">生成建议话术</button>
+        <div id="coResult" style="margin-top:14px"></div>
       </div>
     </div>
   </div>
@@ -243,9 +278,10 @@ function switchTab(tab) {
   if (tab === 'faqs') loadFaqs();
   if (tab === 'docs') loadDocs();
   if (tab === 'reviews') loadReviews();
+  if (tab === 'gaps') loadGaps();
 }
 
-function loadAll() { loadModels(); loadFaqs(); loadDocs(); loadReviews(); }
+function loadAll() { loadModels(); loadFaqs(); loadDocs(); loadReviews(); loadGaps(); }
 
 // ============================================================
 // 模型配置
@@ -450,6 +486,62 @@ async function resolveReview(threadId, action) {
     showMsg(action === 'approve' ? '已批准' : '已驳回');
     loadReviews();
   } catch (e) { showMsg('操作失败: ' + e.message, true); }
+}
+
+// ============================================================
+// 知识盲区分析（运营闭环）
+// ============================================================
+async function loadGaps() {
+  try {
+    var minCount = (document.getElementById('gapMinCount') && document.getElementById('gapMinCount').value) || '2';
+    var data = await api('/admin/knowledge/gap-analysis?min_count=' + encodeURIComponent(minCount));
+    var html = '';
+    if (!data.suggested_faqs.length) html = '<tr><td colspan="4" class="empty">暂无高频盲区，知识库覆盖良好 🎉</td></tr>';
+    data.suggested_faqs.forEach(function(s) {
+      html += '<tr><td><b>' + escapeHtml(s.query) + '</b><br><span style="color:#888;font-size:12px">最近: ' + s.last_seen.slice(0, 10) + '</span></td>' +
+        '<td><span class="tag" style="background:#fff3e0;color:#e65100">' + s.count + ' 次</span></td>' +
+        '<td>' + (s.routes || []).map(function(r) { return '<span class="tag">' + r + '</span>'; }).join('') + '</td>' +
+        '<td><span style="color:#888">' + escapeHtml(s.suggested_faq.question) + '</span><br>' +
+        '<button class="btn btn-secondary btn-sm" onclick="quickAddFaq(\'' + encodeURIComponent(s.suggested_faq.question) + '\')">一键转 FAQ</button></td></tr>';
+    });
+    document.getElementById('gapsBody').innerHTML = html;
+  } catch (e) { showMsg('加载盲区分析失败: ' + e.message, true); }
+}
+
+async function quickAddFaq(question) {
+  var q = decodeURIComponent(question);
+  var answer = prompt('补充分新 FAQ 的答案：', '请补充标准答案');
+  if (answer === null || !answer.trim()) return;
+  try {
+    await api('/admin/faqs', { method: 'POST', body: JSON.stringify({ question: q, answer: answer, category: 'general' }) });
+    showMsg('新 FAQ 已添加，聊天端已自动同步');
+  } catch (e) { showMsg('添加失败: ' + e.message, true); }
+}
+
+// ============================================================
+// 坐席 Copilot
+// ============================================================
+async function runCopilot() {
+  var sessionId = document.getElementById('coSession').value.trim();
+  var message = document.getElementById('coMessage').value.trim();
+  if (!message) { showMsg('请填写客户消息', true); return; }
+  var coResult = document.getElementById('coResult');
+  coResult.innerHTML = '<p style="color:#888">正在生成建议话术...</p>';
+  try {
+    var data = await api('/admin/knowledge/copilot/assist', {
+      method: 'POST',
+      body: JSON.stringify({
+        session_id: sessionId,
+        customer_message: message,
+        agent_draft: document.getElementById('coDraft').value.trim()
+      })
+    });
+    var tools = (data.suggested_tools || []).map(function(t) { return '<span class="tag">' + t + '</span>'; }).join('');
+    coResult.innerHTML =
+      '<div style="background:#f0f4ff;padding:14px;border-radius:8px"><b>📝 推荐话术</b><p style="margin-top:6px">' + escapeHtml(data.suggested_reply) + '</p></div>' +
+      (data.context_summary ? '<div style="background:#f8f8f8;padding:12px;border-radius:8px;margin-top:8px"><b>🗂️ 上下文摘要</b><p style="margin-top:6px;color:#555">' + escapeHtml(data.context_summary) + '</p></div>' : '') +
+      (tools ? '<div style="margin-top:8px"><b>🔧 建议操作</b><div style="margin-top:6px">' + tools + '</div></div>' : '');
+  } catch (e) { coResult.innerHTML = '<p style="color:#c62828">生成失败: ' + escapeHtml(e.message) + '</p>'; }
 }
 
 // 初始化

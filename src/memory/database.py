@@ -147,6 +147,7 @@ async def init_db():
         from src.memory.faq_store import FaqRow
         from src.memory.review import ReviewRow
         from src.memory.customer_store import CustomerRow, OrderRow
+        from src.memory.knowledge_gap_store import KnowledgeGapRow
 
         engine = get_engine()
         async with engine.begin() as conn:

@@ -274,6 +274,21 @@ curl -X POST http://localhost:8000/admin/knowledge/reviews/{thread_id}/approve \
   -H "Authorization: Bearer <token>"
 curl -X POST http://localhost:8000/admin/knowledge/reviews/{thread_id}/reject \
   -H "Authorization: Bearer <token>"
+
+# 6. 知识盲区聚类（FAQ 未命中问题 → 建议补充清单）
+curl "http://localhost:8000/admin/knowledge/gap-analysis?min_count=2" \
+  -H "Authorization: Bearer <token>"
+
+# 7. 矛盾政策检测（新政策 vs 现有 FAQ）
+curl -X POST http://localhost:8000/admin/knowledge/conflict-check \
+  -H "Authorization: Bearer <token>" \
+  -d "policy_text=自本通知发布之日起，支持14天无理由退货。"
+
+# 8. 坐席 Copilot（人工聊天时实时推荐话术）
+curl -X POST http://localhost:8000/admin/knowledge/copilot/assist \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "sess_abc123", "customer_message": "我的订单还没到，很着急！", "agent_draft": ""}'
 ```
 
 ## Docker 部署
@@ -313,14 +328,14 @@ customer-service/
 │   ├── static/               # Web UI（chat.html 聊天 / admin.html 管理后台）
 │   └── utils/                # 上下文窗口管理工具
 ├── migrations/               # Alembic 数据库迁移
-├── tests/                    # 83 个自动化测试 + evals/ 意图评估集
+├── tests/                    # 90+ 个自动化测试 + evals/ 评估集（85 条端到端场景）
 └── data/                     # FAQ 示例数据（faq_samples.json / sample_policy.md）
 ```
 
 ## 运行测试
 
 ```bash
-pytest tests/ -v               # 全部测试（83 个）
+pytest tests/ -v               # 全部测试（90+ 个）
 pytest tests/test_llm.py -v    # LLM 层测试
 pytest tests/test_workflow.py -v  # 工作流集成测试
 pytest tests/test_api.py -v    # API 集成测试
@@ -329,21 +344,28 @@ pytest tests/test_telemetry.py -v  # 可观测性埋点测试
 
 ## 离线评估
 
-基于 50 条真实意图标注样本（覆盖 9 类意图）评估 Triage Agent 的分诊能力。
+三层评估体系：
+
+1. **意图评估**：基于 50 条真实意图标注样本（覆盖 9 类意图）评估 Triage Agent 的分诊能力。
+2. **端到端场景评估**：`tests/evals/e2e_scenarios.json` 现含 **85 条多轮/单轮场景**（FAQ / 技术 / 账务 / 产品 / 客诉 / 转人工 / HITL 大额退款 / 复合意图），覆盖 20+ 业务变体。
+3. **知识盲区回购闭环**：`GET /admin/knowledge/gap-analysis` 聚类未命中问题 → 建议新 FAQ。
 
 ```bash
 # 完整评估（真实 LLM 调用，默认并发 5）
 python -m tests.evals.eval_intent --save
 
-# 小批量试跑
-python -m tests.evals.eval_intent --limit 10
+# 端到端多轮评估（LLM-as-Judge）
+python -m tests.evals.eval_end_to_end --save
 
-# 不调 LLM，仅验证脚本
-python -m tests.evals.eval_intent --dry-run
+# 小批量试跑
+python -m tests.evals.eval_end_to_end --limit 5
+
+# 扩充评估集（幂等，可重复执行）
+python tests/evals/generate_more_scenarios.py
 ```
 
-> 评估脚本支持 `--concurrency` 并发参数（默认 5），50 条样本约 1 分钟跑完。
-> 报告输出到 `tests/evals/reports/`（含混淆矩阵与分类别准确率）。
+> 评估脚本支持 `--concurrency` 并发参数（默认 5），报告输出到 `tests/evals/reports/`。
+> 生成器已把场景集从 20 条程序化扩充至 85 条，可直接再次运行继续扩充。
 
 ### 评估结果（最新）
 

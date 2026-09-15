@@ -4,7 +4,10 @@
     "scenario": "FAQ 直答：询问退货政策",
     "customer_id": "cust_003",
     "conversation": [
-      {"role": "user", "message": "你们支持七天无理由退货吗？"}
+      {
+        "role": "user",
+        "message": "你们支持七天无理由退货吗？"
+      }
     ],
     "expectations": {
       "expected_route": "faq_answer",
@@ -19,7 +22,10 @@
     "scenario": "FAQ 直答：询问运费规则",
     "customer_id": "cust_005",
     "conversation": [
-      {"role": "user", "message": "买多少钱可以包邮？运费怎么算？"}
+      {
+        "role": "user",
+        "message": "买多少钱可以包邮？运费怎么算？"
+      }
     ],
     "expectations": {
       "expected_route": "faq_answer",
@@ -34,7 +40,10 @@
     "scenario": "FAQ 直答：联系人工客服",
     "customer_id": "cust_006",
     "conversation": [
-      {"role": "user", "message": "怎么找人工客服？"}
+      {
+        "role": "user",
+        "message": "怎么找人工客服？"
+      }
     ],
     "expectations": {
       "expected_route": "faq_answer",
@@ -49,11 +58,16 @@
     "scenario": "订单查询：查已发货订单状态",
     "customer_id": "cust_001",
     "conversation": [
-      {"role": "user", "message": "我订单 ord_001 现在到哪了？"}
+      {
+        "role": "user",
+        "message": "我订单 ord_001 现在到哪了？"
+      }
     ],
     "expectations": {
       "expected_route": "technical",
-      "should_use_tools": ["order_lookup"],
+      "should_use_tools": [
+        "order_lookup"
+      ],
       "should_escalate": false,
       "expected_tone": "accurate",
       "forbidden": []
@@ -64,11 +78,16 @@
     "scenario": "订单查询：查普通客户订单",
     "customer_id": "cust_003",
     "conversation": [
-      {"role": "user", "message": "把我全部订单都查一下"}
+      {
+        "role": "user",
+        "message": "把我全部订单都查一下"
+      }
     ],
     "expectations": {
       "expected_route": "technical",
-      "should_use_tools": ["order_lookup"],
+      "should_use_tools": [
+        "order_lookup"
+      ],
       "should_escalate": false,
       "expected_tone": "accurate",
       "forbidden": []
@@ -79,11 +98,16 @@
     "scenario": "订单查询：待发货订单催发货",
     "customer_id": "cust_001",
     "conversation": [
-      {"role": "user", "message": "ord_002 什么时候发货？下单挺久了"}
+      {
+        "role": "user",
+        "message": "ord_002 什么时候发货？下单挺久了"
+      }
     ],
     "expectations": {
       "expected_route": "technical",
-      "should_use_tools": ["order_lookup"],
+      "should_use_tools": [
+        "order_lookup"
+      ],
       "should_escalate": false,
       "expected_tone": "reassuring",
       "forbidden": []
@@ -94,11 +118,16 @@
     "scenario": "技术排查：App 闪退",
     "customer_id": "cust_004",
     "conversation": [
-      {"role": "user", "message": "你们App一直闪退，重新装了也没用"}
+      {
+        "role": "user",
+        "message": "你们App一直闪退，重新装了也没用"
+      }
     ],
     "expectations": {
       "expected_route": "technical",
-      "should_use_tools": ["knowledge_search"],
+      "should_use_tools": [
+        "knowledge_search"
+      ],
       "should_escalate": false,
       "expected_tone": "step_by_step",
       "forbidden": []
@@ -109,11 +138,16 @@
     "scenario": "技术排查：设备无法开机",
     "customer_id": "cust_005",
     "conversation": [
-      {"role": "user", "message": "刚买的设备按了开机键没反应，是不是坏了？"}
+      {
+        "role": "user",
+        "message": "刚买的设备按了开机键没反应，是不是坏了？"
+      }
     ],
     "expectations": {
       "expected_route": "technical",
-      "should_use_tools": ["knowledge_search"],
+      "should_use_tools": [
+        "knowledge_search"
+      ],
       "should_escalate": true,
       "expected_tone": "step_by_step",
       "forbidden": []
@@ -124,7 +158,10 @@
     "scenario": "账户问题：忘记密码",
     "customer_id": "cust_006",
     "conversation": [
-      {"role": "user", "message": "我忘记账号密码了怎么办"}
+      {
+        "role": "user",
+        "message": "我忘记账号密码了怎么办"
+      }
     ],
     "expectations": {
       "expected_route": "faq_answer",
@@ -139,14 +176,22 @@
     "scenario": "投诉：订单超时未到，VIP 客户不满",
     "customer_id": "cust_001",
     "conversation": [
-      {"role": "user", "message": "我 ord_006 下单一周了还没到！你们怎么回事！"}
+      {
+        "role": "user",
+        "message": "我 ord_006 下单一周了还没到！你们怎么回事！"
+      }
     ],
     "expectations": {
       "expected_route": "complaint",
-      "should_use_tools": ["order_lookup", "crm_lookup"],
+      "should_use_tools": [
+        "order_lookup",
+        "crm_lookup"
+      ],
       "should_escalate": true,
       "expected_tone": "empathy",
-      "forbidden": ["promise_refund_without_check"]
+      "forbidden": [
+        "promise_refund_without_check"
+      ]
     }
   },
   {
@@ -154,14 +199,22 @@
     "scenario": "投诉：显示已签收但未收到",
     "customer_id": "cust_005",
     "conversation": [
-      {"role": "user", "message": "的包裹显示签收了但我根本没收到！"}
+      {
+        "role": "user",
+        "message": "的包裹显示签收了但我根本没收到！"
+      }
     ],
     "expectations": {
       "expected_route": "complaint",
-      "should_use_tools": ["order_lookup", "crm_lookup"],
+      "should_use_tools": [
+        "order_lookup",
+        "crm_lookup"
+      ],
       "should_escalate": true,
       "expected_tone": "empathy",
-      "forbidden": ["promise_refund_without_check"]
+      "forbidden": [
+        "promise_refund_without_check"
+      ]
     }
   },
   {
@@ -169,11 +222,17 @@
     "scenario": "投诉：产品破损质量问题",
     "customer_id": "cust_004",
     "conversation": [
-      {"role": "user", "message": "收到的投影仪屏幕有道裂纹，我要投诉！"}
+      {
+        "role": "user",
+        "message": "收到的投影仪屏幕有道裂纹，我要投诉！"
+      }
     ],
     "expectations": {
       "expected_route": "complaint",
-      "should_use_tools": ["order_lookup", "crm_lookup"],
+      "should_use_tools": [
+        "order_lookup",
+        "crm_lookup"
+      ],
       "should_escalate": false,
       "expected_tone": "empathy",
       "forbidden": []
@@ -184,11 +243,16 @@
     "scenario": "退款：普通客户申请退款（低金额）",
     "customer_id": "cust_003",
     "conversation": [
-      {"role": "user", "message": "我想退掉 ord_004 这个手机壳，怎么弄？"}
+      {
+        "role": "user",
+        "message": "我想退掉 ord_004 这个手机壳，怎么弄？"
+      }
     ],
     "expectations": {
       "expected_route": "billing",
-      "should_use_tools": ["order_lookup"],
+      "should_use_tools": [
+        "order_lookup"
+      ],
       "should_escalate": false,
       "expected_tone": "helpful",
       "forbidden": []
@@ -199,14 +263,22 @@
     "scenario": "退款：VIP 客户大额退款触发 HITL（8999 元）",
     "customer_id": "cust_004",
     "conversation": [
-      {"role": "user", "message": "我刚下的 ord_013 游戏主机不想要了，直接退了吧，8999 全额退我"}
+      {
+        "role": "user",
+        "message": "我刚下的 ord_013 游戏主机不想要了，直接退了吧，8999 全额退我"
+      }
     ],
     "expectations": {
       "expected_route": "billing",
-      "should_use_tools": ["order_lookup", "crm_lookup"],
+      "should_use_tools": [
+        "order_lookup",
+        "crm_lookup"
+      ],
       "should_escalate": true,
       "expected_tone": "careful",
-      "forbidden": ["approve_refund_without_review"]
+      "forbidden": [
+        "approve_refund_without_review"
+      ]
     }
   },
   {
@@ -214,14 +286,22 @@
     "scenario": "退款：中金额退款升级到 Supervisor",
     "customer_id": "cust_001",
     "conversation": [
-      {"role": "user", "message": "ord_006 降噪耳机到了但声音有问题，我要退，还要求补偿"}
+      {
+        "role": "user",
+        "message": "ord_006 降噪耳机到了但声音有问题，我要退，还要求补偿"
+      }
     ],
     "expectations": {
       "expected_route": "complaint",
-      "should_use_tools": ["order_lookup", "crm_lookup"],
+      "should_use_tools": [
+        "order_lookup",
+        "crm_lookup"
+      ],
       "should_escalate": true,
       "expected_tone": "empathy",
-      "forbidden": ["promise_refund_without_check"]
+      "forbidden": [
+        "promise_refund_without_check"
+      ]
     }
   },
   {
@@ -229,11 +309,17 @@
     "scenario": "升级：Supervisor 跨域协调（订单+技术问题）",
     "customer_id": "cust_002",
     "conversation": [
-      {"role": "user", "message": "ord_010 智能手表到了，但和我的手机连不上，我想退货"}
+      {
+        "role": "user",
+        "message": "ord_010 智能手表到了，但和我的手机连不上，我想退货"
+      }
     ],
     "expectations": {
       "expected_route": "technical",
-      "should_use_tools": ["order_lookup", "knowledge_search"],
+      "should_use_tools": [
+        "order_lookup",
+        "knowledge_search"
+      ],
       "should_escalate": true,
       "expected_tone": "helpful",
       "forbidden": []
@@ -244,7 +330,10 @@
     "scenario": "升级：转人工（明确要求人工客服）",
     "customer_id": "cust_001",
     "conversation": [
-      {"role": "user", "message": "我不想和机器人说了，让你们真人客服来"}
+      {
+        "role": "user",
+        "message": "我不想和机器人说了，让你们真人客服来"
+      }
     ],
     "expectations": {
       "expected_route": "human_handoff",
@@ -259,15 +348,26 @@
     "scenario": "多轮：投诉-追问-升级 完整链路",
     "customer_id": "cust_001",
     "conversation": [
-      {"role": "user", "message": "我的齿轮键盘 ord_001 用了两周就有按键失灵了"},
-      {"role": "user", "message": "客服说要检查，但是我这周就要用啊，能不能换新的？"}
+      {
+        "role": "user",
+        "message": "我的齿轮键盘 ord_001 用了两周就有按键失灵了"
+      },
+      {
+        "role": "user",
+        "message": "客服说要检查，但是我这周就要用啊，能不能换新的？"
+      }
     ],
     "expectations": {
       "expected_route": "complaint",
-      "should_use_tools": ["order_lookup", "crm_lookup"],
+      "should_use_tools": [
+        "order_lookup",
+        "crm_lookup"
+      ],
       "should_escalate": true,
       "expected_tone": "empathy",
-      "forbidden": ["promise_refund_without_check"]
+      "forbidden": [
+        "promise_refund_without_check"
+      ]
     }
   },
   {
@@ -275,7 +375,10 @@
     "scenario": "产品咨询：带推荐对比",
     "customer_id": "cust_005",
     "conversation": [
-      {"role": "user", "message": "你们哪个型号的机械键盘性价比高？想换个新的"}
+      {
+        "role": "user",
+        "message": "你们哪个型号的机械键盘性价比高？想换个新的"
+      }
     ],
     "expectations": {
       "expected_route": "product",
@@ -290,14 +393,1301 @@
     "scenario": "账户安全：账号注销申请（高风险）",
     "customer_id": "cust_006",
     "conversation": [
-      {"role": "user", "message": "我要注销我的账号，不想要了"}
+      {
+        "role": "user",
+        "message": "我要注销我的账号，不想要了"
+      }
     ],
     "expectations": {
       "expected_route": "billing",
-      "should_use_tools": ["crm_lookup"],
+      "should_use_tools": [
+        "crm_lookup"
+      ],
       "should_escalate": true,
       "expected_tone": "careful",
-      "forbidden": ["approve_deletion_without_review"]
+      "forbidden": [
+        "approve_deletion_without_review"
+      ]
+    }
+  },
+  {
+    "id": "faq_021",
+    "scenario": "FAQ 变体 1",
+    "customer_id": "cust_003",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "怎么改收货地址？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_021b",
+    "scenario": "FAQ 变体 1（加礼貌用语）",
+    "customer_id": "cust_004",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "您好，怎么改收货地址？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_022",
+    "scenario": "FAQ 变体 2",
+    "customer_id": "cust_004",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "退货要自己出运费吗？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_022b",
+    "scenario": "FAQ 变体 2（加礼貌用语）",
+    "customer_id": "cust_005",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "您好，退货要自己出运费吗？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_023",
+    "scenario": "FAQ 变体 3",
+    "customer_id": "cust_005",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "发票抬头可以改吗？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_023b",
+    "scenario": "FAQ 变体 3（加礼貌用语）",
+    "customer_id": "cust_006",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "您好，发票抬头可以改吗？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_024",
+    "scenario": "FAQ 变体 4",
+    "customer_id": "cust_006",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "你们周末发货吗？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_024b",
+    "scenario": "FAQ 变体 4（加礼貌用语）",
+    "customer_id": "cust_007",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "您好，你们周末发货吗？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_025",
+    "scenario": "FAQ 变体 5",
+    "customer_id": "cust_007",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "支持货到付款吗？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_025b",
+    "scenario": "FAQ 变体 5（加礼貌用语）",
+    "customer_id": "cust_008",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "您好，支持货到付款吗？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_026",
+    "scenario": "FAQ 变体 6",
+    "customer_id": "cust_003",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "优惠券可以叠加使用？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_026b",
+    "scenario": "FAQ 变体 6（加礼貌用语）",
+    "customer_id": "cust_004",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "您好，优惠券可以叠加使用？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_027",
+    "scenario": "FAQ 变体 7",
+    "customer_id": "cust_004",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "破损件怎么申请补发？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_027b",
+    "scenario": "FAQ 变体 7（加礼貌用语）",
+    "customer_id": "cust_005",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "您好，破损件怎么申请补发？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "tech_031",
+    "scenario": "技术问题变体 1",
+    "customer_id": "cust_005",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "App 一直闪退怎么办？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "technical",
+      "should_use_tools": [
+        "knowledge_search"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "tech_032",
+    "scenario": "技术问题变体 2",
+    "customer_id": "cust_006",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "设备连不上 WiFi"
+      }
+    ],
+    "expectations": {
+      "expected_route": "technical",
+      "should_use_tools": [
+        "knowledge_search"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "tech_033",
+    "scenario": "技术问题变体 3",
+    "customer_id": "cust_007",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "软件更新后卡在登录页"
+      }
+    ],
+    "expectations": {
+      "expected_route": "technical",
+      "should_use_tools": [
+        "knowledge_search"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "tech_034",
+    "scenario": "技术问题变体 4",
+    "customer_id": "cust_008",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "蓝牙配对失败"
+      }
+    ],
+    "expectations": {
+      "expected_route": "technical",
+      "should_use_tools": [
+        "knowledge_search"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "tech_035",
+    "scenario": "技术问题变体 5",
+    "customer_id": "cust_009",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "界面显示乱码"
+      }
+    ],
+    "expectations": {
+      "expected_route": "technical",
+      "should_use_tools": [
+        "knowledge_search"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "tech_036",
+    "scenario": "技术问题变体 6",
+    "customer_id": "cust_005",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "摄像头无法调用"
+      }
+    ],
+    "expectations": {
+      "expected_route": "technical",
+      "should_use_tools": [
+        "knowledge_search"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "bill_041",
+    "scenario": "账务问题变体 1",
+    "customer_id": "cust_006",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "我的账户余额怎么变负数了？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "billing",
+      "should_use_tools": [
+        "crm_lookup"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "bill_042",
+    "scenario": "账务问题变体 2",
+    "customer_id": "cust_007",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "怎么解绑自动扣款？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "billing",
+      "should_use_tools": [
+        "crm_lookup"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "bill_043",
+    "scenario": "账务问题变体 3",
+    "customer_id": "cust_008",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "上月账单多扣了一笔"
+      }
+    ],
+    "expectations": {
+      "expected_route": "billing",
+      "should_use_tools": [
+        "order_lookup"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "bill_044",
+    "scenario": "账务问题变体 4",
+    "customer_id": "cust_009",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "积分为什么一直没到账？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "billing",
+      "should_use_tools": [
+        "crm_lookup"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "bill_045",
+    "scenario": "账务问题变体 5",
+    "customer_id": "cust_0010",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "会员续费价格不对"
+      }
+    ],
+    "expectations": {
+      "expected_route": "billing",
+      "should_use_tools": [
+        "crm_lookup"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "prod_051",
+    "scenario": "产品咨询变体 1",
+    "customer_id": "cust_007",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "A款和B款有什么区别？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "product",
+      "should_use_tools": [
+        "knowledge_search"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "prod_052",
+    "scenario": "产品咨询变体 2",
+    "customer_id": "cust_008",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "这款支持无线充电吗？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "product",
+      "should_use_tools": [
+        "knowledge_search"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "prod_053",
+    "scenario": "产品咨询变体 3",
+    "customer_id": "cust_009",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "套餐里都包含什么配件？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "product",
+      "should_use_tools": [
+        "knowledge_search"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "prod_054",
+    "scenario": "产品咨询变体 4",
+    "customer_id": "cust_0010",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "新品什么时候发售？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "product",
+      "should_use_tools": [
+        "knowledge_search"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "comp_061",
+    "scenario": "客诉变体 1",
+    "customer_id": "cust_008",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "客服电话打不通，太不像话了！"
+      }
+    ],
+    "expectations": {
+      "expected_route": "complaint",
+      "should_use_tools": [
+        "crm_lookup",
+        "order_lookup"
+      ],
+      "should_escalate": false,
+      "expected_tone": "soothe",
+      "forbidden": [],
+      "should_block": false
+    }
+  },
+  {
+    "id": "comp_062",
+    "scenario": "客诉变体 2",
+    "customer_id": "cust_009",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "送来的东西是坏的，态度还差"
+      }
+    ],
+    "expectations": {
+      "expected_route": "complaint",
+      "should_use_tools": [
+        "crm_lookup",
+        "order_lookup"
+      ],
+      "should_escalate": false,
+      "expected_tone": "soothe",
+      "forbidden": [],
+      "should_block": false
+    }
+  },
+  {
+    "id": "comp_063",
+    "scenario": "客诉变体 3",
+    "customer_id": "cust_0010",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "等了10天没发货，我要投诉"
+      }
+    ],
+    "expectations": {
+      "expected_route": "complaint",
+      "should_use_tools": [
+        "crm_lookup",
+        "order_lookup"
+      ],
+      "should_escalate": false,
+      "expected_tone": "soothe",
+      "forbidden": [],
+      "should_block": false
+    }
+  },
+  {
+    "id": "comp_064",
+    "scenario": "客诉变体 4",
+    "customer_id": "cust_0011",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "包装破损严重，收货体验极差"
+      }
+    ],
+    "expectations": {
+      "expected_route": "complaint",
+      "should_use_tools": [
+        "crm_lookup",
+        "order_lookup"
+      ],
+      "should_escalate": false,
+      "expected_tone": "soothe",
+      "forbidden": [],
+      "should_block": false
+    }
+  },
+  {
+    "id": "hand_071",
+    "scenario": "转人工变体 1",
+    "customer_id": "cust_009",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "我要找人工客服！"
+      }
+    ],
+    "expectations": {
+      "expected_route": "human_handoff",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "handoff",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "hand_072",
+    "scenario": "转人工变体 2",
+    "customer_id": "cust_0010",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "你们系统搞不定，直接给我转人工"
+      }
+    ],
+    "expectations": {
+      "expected_route": "human_handoff",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "handoff",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "hand_073",
+    "scenario": "转人工变体 3",
+    "customer_id": "cust_0011",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "别啰嗦了，让人工来处理"
+      }
+    ],
+    "expectations": {
+      "expected_route": "human_handoff",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "handoff",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "hitl_081",
+    "scenario": "HITL 大额退款场景 1",
+    "customer_id": "cust_002",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "要求全额退款600元，钱到现在没到账"
+      }
+    ],
+    "expectations": {
+      "expected_route": "billing",
+      "should_use_tools": [
+        "crm_lookup",
+        "order_lookup"
+      ],
+      "should_escalate": true,
+      "expected_tone": "soothe",
+      "forbidden": [],
+      "require_human_review": true
+    }
+  },
+  {
+    "id": "hitl_082",
+    "scenario": "HITL 大额退款场景 2",
+    "customer_id": "cust_003",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "账户被莫名扣了800，立即退回来"
+      }
+    ],
+    "expectations": {
+      "expected_route": "complaint",
+      "should_use_tools": [
+        "crm_lookup",
+        "order_lookup"
+      ],
+      "should_escalate": true,
+      "expected_tone": "soothe",
+      "forbidden": [],
+      "require_human_review": true
+    }
+  },
+  {
+    "id": "hitl_083",
+    "scenario": "HITL 大额退款场景 3",
+    "customer_id": "cust_004",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "退款900元，不然就曝光你们"
+      }
+    ],
+    "expectations": {
+      "expected_route": "complaint",
+      "should_use_tools": [
+        "crm_lookup",
+        "order_lookup"
+      ],
+      "should_escalate": true,
+      "expected_tone": "soothe",
+      "forbidden": [],
+      "require_human_review": true
+    }
+  },
+  {
+    "id": "hitl_084",
+    "scenario": "HITL 大额退款场景 4",
+    "customer_id": "cust_005",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "充值1000元不能用了，要求原路退还"
+      }
+    ],
+    "expectations": {
+      "expected_route": "billing",
+      "should_use_tools": [
+        "crm_lookup",
+        "order_lookup"
+      ],
+      "should_escalate": true,
+      "expected_tone": "soothe",
+      "forbidden": [],
+      "require_human_review": true
+    }
+  },
+  {
+    "id": "faq_w2_01",
+    "scenario": "FAQ 第二轮变体 1",
+    "customer_id": "cust_003",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "多久能收到发票？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_w2_02",
+    "scenario": "FAQ 第二轮变体 2",
+    "customer_id": "cust_004",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "可以自提吗？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_w2_03",
+    "scenario": "FAQ 第二轮变体 3",
+    "customer_id": "cust_005",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "保修需要发票吗？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_w2_04",
+    "scenario": "FAQ 第二轮变体 4",
+    "customer_id": "cust_006",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "预售商品什么时候发货？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_w2_05",
+    "scenario": "FAQ 第二轮变体 5",
+    "customer_id": "cust_007",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "赠品可以换别的吗？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_w2_06",
+    "scenario": "FAQ 第二轮变体 6",
+    "customer_id": "cust_003",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "怎么查询订单物流？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "faq_w2_07",
+    "scenario": "FAQ 第二轮变体 7",
+    "customer_id": "cust_004",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "退款到账需要多久？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "tech_w2_01",
+    "scenario": "技术第二轮变体 1",
+    "customer_id": "cust_005",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "更新后功能不见了"
+      }
+    ],
+    "expectations": {
+      "expected_route": "technical",
+      "should_use_tools": [
+        "knowledge_search"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "tech_w2_02",
+    "scenario": "技术第二轮变体 2",
+    "customer_id": "cust_006",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "设备间歇性断连"
+      }
+    ],
+    "expectations": {
+      "expected_route": "technical",
+      "should_use_tools": [
+        "knowledge_search"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "tech_w2_03",
+    "scenario": "技术第二轮变体 3",
+    "customer_id": "cust_007",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "扫码没反应"
+      }
+    ],
+    "expectations": {
+      "expected_route": "technical",
+      "should_use_tools": [
+        "knowledge_search"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "tech_w2_04",
+    "scenario": "技术第二轮变体 4",
+    "customer_id": "cust_008",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "电池耗电异常快"
+      }
+    ],
+    "expectations": {
+      "expected_route": "technical",
+      "should_use_tools": [
+        "knowledge_search"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "bill_w2_01",
+    "scenario": "账务第二轮变体 1",
+    "customer_id": "cust_006",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "自动续费忘记关，扣了两期"
+      }
+    ],
+    "expectations": {
+      "expected_route": "billing",
+      "should_use_tools": [
+        "order_lookup"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "bill_w2_02",
+    "scenario": "账务第二轮变体 2",
+    "customer_id": "cust_007",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "账单地址怎么修改？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "billing",
+      "should_use_tools": [
+        "crm_lookup"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "bill_w2_03",
+    "scenario": "账务第二轮变体 3",
+    "customer_id": "cust_008",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "历史账单可以导出吗？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "billing",
+      "should_use_tools": [
+        "crm_lookup"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "prod_w2_01",
+    "scenario": "产品第二轮变体 1",
+    "customer_id": "cust_007",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "Pro 和标准版差别大吗？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "product",
+      "should_use_tools": [
+        "knowledge_search"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "prod_w2_02",
+    "scenario": "产品第二轮变体 2",
+    "customer_id": "cust_008",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "有儿童模式吗？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "product",
+      "should_use_tools": [
+        "knowledge_search"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "prod_w2_03",
+    "scenario": "产品第二轮变体 3",
+    "customer_id": "cust_009",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "外壳材质是什么？"
+      }
+    ],
+    "expectations": {
+      "expected_route": "product",
+      "should_use_tools": [
+        "knowledge_search"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "comp_w2_01",
+    "scenario": "客诉第二轮变体 1",
+    "customer_id": "cust_008",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "赠品没发还态度敷衍，差评！"
+      }
+    ],
+    "expectations": {
+      "expected_route": "complaint",
+      "should_use_tools": [
+        "crm_lookup",
+        "order_lookup"
+      ],
+      "should_escalate": false,
+      "expected_tone": "soothe",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "comp_w2_02",
+    "scenario": "客诉第二轮变体 2",
+    "customer_id": "cust_009",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "说好的补偿一直没兑现"
+      }
+    ],
+    "expectations": {
+      "expected_route": "complaint",
+      "should_use_tools": [
+        "crm_lookup",
+        "order_lookup"
+      ],
+      "should_escalate": false,
+      "expected_tone": "soothe",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "comp_w2_03",
+    "scenario": "客诉第二轮变体 3",
+    "customer_id": "cust_0010",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "客服来回踢皮球，气死了"
+      }
+    ],
+    "expectations": {
+      "expected_route": "complaint",
+      "should_use_tools": [
+        "crm_lookup",
+        "order_lookup"
+      ],
+      "should_escalate": false,
+      "expected_tone": "soothe",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "hand_w2_01",
+    "scenario": "转人工第二轮变体 1",
+    "customer_id": "cust_009",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "这个问题你们处理不了，转人工吧"
+      }
+    ],
+    "expectations": {
+      "expected_route": "human_handoff",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "handoff",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "hand_w2_02",
+    "scenario": "转人工第二轮变体 2",
+    "customer_id": "cust_0010",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "请尽快安排人工专员联系我"
+      }
+    ],
+    "expectations": {
+      "expected_route": "human_handoff",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "handoff",
+      "forbidden": []
+    }
+  },
+  {
+    "id": "multi_091",
+    "scenario": "多轮：询问发货后催物流",
+    "customer_id": "cust_003",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "我周二下的单什么时候发货？"
+      },
+      {
+        "role": "user",
+        "message": "刚查了昨天的日志，还没发货啊，帮我催一下！"
+      }
+    ],
+    "expectations": {
+      "expected_route": "technical",
+      "should_use_tools": [
+        "order_lookup"
+      ],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": [],
+      "multi_turn": true
+    }
+  },
+  {
+    "id": "multi_092",
+    "scenario": "多轮：先问政策后要求补偿",
+    "customer_id": "cust_005",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "你们支持退货吗？"
+      },
+      {
+        "role": "user",
+        "message": "那我直接退了吧，运费你们得承担"
+      }
+    ],
+    "expectations": {
+      "expected_route": "faq_answer",
+      "should_use_tools": [],
+      "should_escalate": false,
+      "expected_tone": "clear",
+      "forbidden": [],
+      "multi_turn": true
+    }
+  },
+  {
+    "id": "multi_093",
+    "scenario": "多轮：升级压缩后继续深挖",
+    "customer_id": "cust_002",
+    "conversation": [
+      {
+        "role": "user",
+        "message": "App 无法登录，重置密码也没用"
+      },
+      {
+        "role": "user",
+        "message": "换手机和换网络都试过了，还是不行，帮我升级处理"
+      }
+    ],
+    "expectations": {
+      "expected_route": "technical",
+      "should_use_tools": [
+        "ticket_create"
+      ],
+      "should_escalate": true,
+      "expected_tone": "clear",
+      "forbidden": [],
+      "multi_turn": true
     }
   }
 ]

@@ -447,3 +447,178 @@ async def reject_review(thread_id: str, reason: str = "", request: Request = Non
     )
 
     return {"status": "rejected", "thread_id": thread_id, "reason": reason}
+
+
+# ============================================================
+# 知识库运营闭环（Phase 4）
+# ============================================================
+
+@router.get(
+    "/gap-analysis",
+    summary="知识盲区聚类分析",
+)
+async def gap_analysis(
+    min_count: int = 2,
+    _auth: str = Depends(require_admin),
+):
+    """
+    聚类分析 FAQ 未命中/转人工的高频盲区问题
+
+    返回《待补充 FAQ 建议清单》：按 query 聚合 + 出现次数排序 + 建议的 FAQ 模板。
+    """
+    from src.api.knowledge_gap import get_gap_analysis
+
+    suggestions = await get_gap_analysis(min_count=max(1, min_count))
+    return {
+        "total_clusters": len(suggestions),
+        "suggested_faqs": suggestions,
+    }
+
+
+@router.post(
+    "/conflict-check",
+    summary="新政策与现有 FAQ 矛盾检测",
+)
+async def conflict_check(
+    policy_text: str = Form(..., description="新上传的政策/文档内容"),
+    _auth: str = Depends(require_admin),
+):
+    """
+    用 LLM 对比新政策文本与现有 FAQ，检测矛盾政策
+
+    场景：运营上传新退款政策（如退货期从 7 天改为 14 天）时，
+    自动提示与现有 FAQ 冲突的条款，避免知识库自相矛盾。
+    """
+    if len(policy_text.strip()) < 10:
+        raise HTTPException(status_code=400, detail="政策文本过短（至少 10 字）")
+
+    # 拉取现有 FAQ 作为对比基准
+    existing_faqs = []
+    try:
+        from src.memory.database import get_session_factory
+        from src.memory.faq_store import FaqStore
+
+        factory = get_session_factory()
+        async with factory() as db:
+            faqs = await FaqStore(db).list_all()
+            existing_faqs = [f.model_dump() for f in faqs][:50]
+    except Exception as e:
+        logger.warning(f"ConflictCheck: FAQ 拉取失败: {e}")
+
+    if not existing_faqs:
+        return {"status": "ok", "conflicts": [], "message": "知识库暂无 FAQ，无需检测"}
+
+    # 用 LLM 对比（示例：通过 Triage Agent 的 chat 能力）
+    try:
+        from src.agents.triage import TriageAgent
+
+        agent = TriageAgent()
+        faq_text = "\n".join(
+            f"- Q: {f['question']} → A: {f['answer'][:120]}"
+            for f in existing_faqs[:30]
+        )
+        user_prompt = (
+            f"新政策内容：\n{policy_text[:2000]}\n\n"
+            f"现有 FAQ 条目：\n{faq_text}\n\n"
+            "请检查新政策与现有 FAQ 是否矛盾（如：退货天数不一致、赔付标准冲突、"
+            "禁止条款相悖）。如果没有矛盾，只返回 JSON：{'conflicts': []}；"
+            "如果有，返回 JSON：{'conflicts': [{'faq_question': '...', 'conflict_detail': '说明矛盾点'}]}"
+            "只输出 JSON，不要额外解释。"
+        )
+        raw = await agent.call_chat(
+            system_prompt="你是知识库合规审查助手。只输出合法 JSON。",
+            user_prompt=user_prompt,
+        )
+
+        import json, re
+        m = re.search(r'\{.*\}', raw, re.S)
+        if m:
+            parsed = json.loads(m.group(0))
+            conflicts = parsed.get("conflicts", [])
+            return {"status": "ok", "conflicts": conflicts}
+        return {"status": "ok", "conflicts": [], "raw": raw[:200]}
+    except Exception as e:
+        logger.error(f"ConflictCheck: LLM 调用失败: {e}")
+        return {"status": "error", "conflicts": [], "message": "LLM 检测暂不可用,请稍后重试"}
+
+
+# ============================================================
+# 坐席 Copilot（Phase 4）
+# ============================================================
+
+class CopilotRequest(BaseModel):
+    """Copilot 辅助请求"""
+    session_id: str = Field(..., description="会话 ID")
+    customer_message: str = Field(..., description="客户最新消息")
+    agent_draft: str = Field(default="", description="坐席已输入的草稿（可选）")
+
+
+class CopilotResponse(BaseModel):
+    """Copilot 辅助响应"""
+    suggested_reply: str = Field(description="推荐回复话术")
+    context_summary: str = Field(default="", description="上下文摘要（给坐席看）")
+    suggested_tools: list[str] = Field(default_factory=list, description="建议查询的操作卡片")
+
+
+@router.post(
+    "/copilot/assist",
+    response_model=CopilotResponse,
+    summary="坐席 Copilot：实时推荐话术",
+)
+async def copilot_assist(
+    req: CopilotRequest,
+    _auth: str = Depends(require_admin),
+):
+    """
+    人工坐席聊天时，后台 Agent 旁路生成推荐话术
+
+    输入：客户消息 + 坐席草稿（可选）
+    输出：推荐回复 + 上下文摘要 + 建议查询的工具
+    """
+    # 拉取会话历史作为上下文
+    history_text = ""
+    try:
+        store = get_storage()
+        history = await store.get_history(req.session_id, limit=10)
+        if history:
+            history_text = "\n".join(
+                f"[{'客户' if m.get('role') == 'user' else '客服'}]: {str(m.get('content', ''))[:150]}"
+                for m in history
+            )
+    except Exception as e:
+        logger.warning(f"Copilot: 历史拉取失败: {e}")
+
+    try:
+        from src.agents.supervisor import SupervisorAgent
+
+        agent = SupervisorAgent()
+        user_prompt = (
+            f"## 客户最新消息\n{req.customer_message}\n\n"
+            f"## 会话历史\n{history_text or '（无）'}\n\n"
+            f"## 坐席草稿\n{req.agent_draft or '（未填写）'}\n\n"
+            "请以资深客服主管视角，给出：\n"
+            "1. suggested_reply: 一段可以直接发送给客户的、专业且有人情味的回复话术；\n"
+            "2. context_summary: 一段给坐席看的上下文摘要（客户诉求、情绪、需要核实的点）；\n"
+            "3. suggested_tools: 建议坐席查询的工具列表，如 crm_lookup / order_lookup / knowledge_search / ticket_query。\n"
+            "只输出 JSON：{'suggested_reply': '...', 'context_summary': '...', 'suggested_tools': [...]}"
+        )
+        raw = await agent.call_chat(
+            system_prompt="你是客服坐席的 AI 副驾驶。只输出合法 JSON，不要多余文字。",
+            user_prompt=user_prompt,
+        )
+
+        import json, re
+        m = re.search(r'\{.*\}', raw, re.S)
+        if m:
+            parsed = json.loads(m.group(0))
+            return CopilotResponse(
+                suggested_reply=parsed.get("suggested_reply", ""),
+                context_summary=parsed.get("context_summary", ""),
+                suggested_tools=parsed.get("suggested_tools", []),
+            )
+        return CopilotResponse(
+            suggested_reply=req.customer_message, context_summary="无法解析 Copilot 回复",
+        )
+    except Exception as e:
+        logger.error(f"Copilot: 调用失败: {e}")
+        raise HTTPException(status_code=500, detail=f"Copilot 暂时不可用: {e}")

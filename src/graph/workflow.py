@@ -311,6 +311,17 @@ async def faq_answer_node(state: dict) -> dict:
             logger.info(
                 f"[FAQ] 知识库未命中(score={search.get('top_score', 0):.3f})，回落 LLM"
             )
+            # 知识盲区记录：用于运营生成《待补充 FAQ 清单》
+            try:
+                from src.api.knowledge_gap import record_gap
+                await record_gap(
+                    session_id=state.get("session_id", ""),
+                    query=user_message,
+                    route="faq_answer",
+                    reason=f"向量检索未命中 (score={search.get('top_score', 0):.3f}, threshold={config.FAQ_CONFIDENCE_THRESHOLD})",
+                )
+            except Exception as gap_err:
+                logger.warning(f"KnowledgeGap: 记录失败: {gap_err}")
     except Exception as e:
         logger.warning(f"[FAQ] 知识库检索失败，回落 LLM: {e}")
 
@@ -815,6 +826,18 @@ async def human_handoff_node(state: dict) -> dict:
         await add_review(thread_id, review_context)
     except Exception as e:
         logger.error(f"[HumanHandoff] 审核入队失败: {e}")
+
+    # 知识盲区记录：转人工意味着自动问答未满足客户，沉淀运营建议
+    try:
+        from src.api.knowledge_gap import record_gap
+        await record_gap(
+            session_id=session_id,
+            query=reason or "客户要求转人工",
+            route="human_handoff",
+            reason=f"转人工: {handoff_summary[:200]}",
+        )
+    except Exception as e:
+        logger.warning(f"KnowledgeGap: 记录失败: {e}")
 
     handoff_msg = (
         f"您的转人工申请已提交，请稍候，客服主管会尽快处理。"
