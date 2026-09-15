@@ -95,6 +95,8 @@ async def list_conversations(
     if not status:
         statuses = [ConversationStatus.HANDOFF.value, ConversationStatus.AWAITING_REVIEW.value]
         status = None  # 拉全部再过滤
+    else:
+        statuses = None  # 显式指定状态时不做二次过滤
 
     try:
         async with get_session_factory()() as db:
