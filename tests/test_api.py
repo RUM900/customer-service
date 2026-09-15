@@ -311,6 +311,118 @@ class TestChat:
 
 
 # ============================================================
+# HITL 闭环
+# ============================================================
+
+class TestHITLClosure:
+    """HITL 闭环集成测试"""
+
+    @patch("src.api.routes.get_storage")
+    @patch("src.graph.workflow.run_customer_service")
+    def test_chat_interrupt_returns_202(
+        self, mock_workflow, mock_storage, client, auth_headers
+    ):
+        """HITL interrupt 应返回 202 + 受理信息，而非 500"""
+        from langgraph.errors import GraphInterrupt
+
+        mock_workflow.side_effect = GraphInterrupt("interrupted")
+
+        mock_store = AsyncMock()
+        mock_store.get_history.return_value = []
+        mock_store.get_session.return_value = None
+        mock_store.save_message.return_value = None
+        mock_store.update_session.return_value = None
+        mock_storage.return_value = mock_store
+
+        response = client.post(
+            "/chat/sess_test_001",
+            json={"message": "要求退款600元"},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 202
+        data = response.json()
+        assert data["status"] == "awaiting_review"
+        assert data["thread_id"]
+        # 应写入"审核中"提示消息
+        saved = mock_store.save_message.call_args
+        assert "人工审核" in saved[0][1].content
+
+    @patch("src.api.routes.get_storage")
+    def test_review_status_pending(self, mock_storage, client, auth_headers):
+        """查询待审核状态应返回 pending"""
+        from src.api.review_store import _reviews
+
+        _reviews["thread_test_001"] = {
+            "review_id": "rev_test",
+            "thread_id": "thread_test_001",
+            "session_id": "sess_test_001",
+            "review_type": "supervisor_decision",
+            "decision": {},
+            "review_items": [],
+            "status": "pending",
+            "message": "人工审核请求",
+            "handoff_summary": "",
+            "ticket_id": "",
+            "reviewer_note": None,
+            "created_at": "2026-08-27T00:00:00",
+            "reviewed_at": None,
+        }
+        mock_store = AsyncMock()
+        mock_store.get_history.return_value = []
+        mock_storage.return_value = mock_store
+
+        response = client.get(
+            "/chat/sess_test_001/review/thread_test_001",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["review_status"] == "pending"
+        assert data["reviewed"] is False
+
+        _reviews.pop("thread_test_001", None)
+
+    @patch("src.api.routes.get_storage")
+    def test_review_status_rejected(self, mock_storage, client, auth_headers):
+        """已驳回的审核应返回最终回复"""
+        from src.api.review_store import _reviews
+
+        _reviews["thread_test_002"] = {
+            "review_id": "rev_test",
+            "thread_id": "thread_test_002",
+            "session_id": "sess_test_001",
+            "review_type": "supervisor_decision",
+            "decision": {},
+            "review_items": [],
+            "status": "rejected",
+            "message": "人工审核请求",
+            "handoff_summary": "",
+            "ticket_id": "",
+            "reviewer_note": "退款依据不足",
+            "created_at": "2026-08-27T00:00:00",
+            "reviewed_at": "2026-08-27T00:10:00",
+        }
+        mock_store = AsyncMock()
+        mock_store.get_history.return_value = []
+        mock_storage.return_value = mock_store
+
+        response = client.get(
+            "/chat/sess_test_001/review/thread_test_002",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["review_status"] == "rejected"
+        assert data["reviewed"] is True
+        assert "退款依据不足" in data["final_reply"]
+
+        _reviews.pop("thread_test_002", None)
+
+
+# ============================================================
 # Chat History
 # ============================================================
 

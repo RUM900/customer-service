@@ -26,6 +26,8 @@ async def add_review(thread_id: str, review_context: dict) -> None:
         "decision": review_context.get("decision", {}),
         "review_items": review_context.get("review_items", []),
         "message": review_context.get("message", ""),
+        "handoff_summary": review_context.get("handoff_summary", ""),
+        "ticket_id": review_context.get("ticket_id", ""),
     }
     try:
         from src.memory.database import get_session_factory
@@ -54,6 +56,8 @@ async def add_review(thread_id: str, review_context: dict) -> None:
         "review_items": review.get("review_items", []),
         "status": "pending",
         "message": review.get("message", ""),
+        "handoff_summary": review.get("handoff_summary", ""),
+        "ticket_id": review.get("ticket_id", ""),
         "reviewer_note": None,
         "created_at": now,
         "reviewed_at": None,

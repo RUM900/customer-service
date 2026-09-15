@@ -41,6 +41,11 @@ class CustomerServiceState(TypedDict, total=False):
     escalation_reason: str
     supervisor_decision: Optional[dict]
 
+    # === 跨域协调（coordinate） ===
+    coordinated_agents: Annotated[list[str], operator.add]  # 已协调过的 specialist
+    handoff_summary: str                                   # 转人工摘要（传给人工坐席）
+    handoff_ticket_id: str                                 # 转人工自动生成的工单 ID
+
     # === 解决 ===
     resolution: Optional[dict]
     final_reply: str
@@ -101,6 +106,9 @@ def create_initial_state(
         "status": ConversationStatus.ACTIVE.value,
         "current_tier": Tier.TRIAGE.value,
         "active_agent": "",
+        "coordinated_agents": [],
+        "handoff_summary": "",
+        "handoff_ticket_id": "",
         "tool_results": [],
         "tool_round": 0,
         "max_tool_rounds": 2,

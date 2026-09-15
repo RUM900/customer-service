@@ -15,14 +15,14 @@ import logging
 import json
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sse_starlette.sse import EventSourceResponse
+from langgraph.errors import GraphInterrupt
 
 from src.api.schemas import (
-    ChatRequest, ChatResponse, CreateSessionRequest,
-    SessionResponse, HistoryResponse,
-    CreateTicketRequest, TicketResponse,
-    HealthResponse,
+    ChatRequest, ChatResponse, ChatAcceptedResponse, ReviewResultResponse,
+    CreateSessionRequest, SessionResponse, HistoryResponse,
+    CreateTicketRequest, TicketResponse, HealthResponse,
 )
 from src.api.storage import get_storage
 from src.api.auth import require_agent
@@ -46,13 +46,22 @@ router = APIRouter()
 
 @router.post(
     "/chat/{session_id}",
-    response_model=ChatResponse,
-    summary="发起一轮客服对话",
+    response_model=ChatAcceptedResponse | ChatResponse,
+    summary="发起一轮客服对话（HITL 时返回 202 受理）",
+    responses={
+        200: {"model": ChatResponse, "description": "对话正常完成"},
+        202: {"model": ChatAcceptedResponse, "description": "已提交人工审核，等待审批"},
+    },
 )
-async def chat(session_id: str, req: ChatRequest, _auth: str = Depends(require_agent)) -> ChatResponse:
+async def chat(
+    session_id: str,
+    req: ChatRequest,
+    response: Response,
+    _auth: str = Depends(require_agent),
+) -> ChatResponse | ChatAcceptedResponse:
     """核心对话端点 — 每轮对话执行一次完整的 LangGraph 工作流"""
     try:
-        from src.graph.workflow import run_customer_service
+        from src.graph.workflow import run_customer_service, _new_thread_id
 
         # --- 输入安全检测 ---
         clean_message = sanitize_user_input(req.message)
@@ -75,13 +84,36 @@ async def chat(session_id: str, req: ChatRequest, _auth: str = Depends(require_a
         user_msg = Message(role=MessageRole.USER, content=clean_message)
         await store.save_message(session_id, user_msg)
 
-        # 执行工作流
-        final_state = await run_customer_service(
-            session_id=session_id,
-            user_message=clean_message,
-            customer_id=effective_customer_id,
-            history_messages=history,
-        )
+        # 每轮独立 thread_id（HITL 恢复键）
+        thread_id = _new_thread_id(session_id)
+
+        try:
+            final_state = await run_customer_service(
+                session_id=session_id,
+                user_message=clean_message,
+                customer_id=effective_customer_id,
+                history_messages=history,
+                thread_id=thread_id,
+            )
+        except GraphInterrupt:
+            # HITL 挂起：返回 202 + 受理信息，写入“审核中”提示消息
+            pending_msg = Message(
+                role=MessageRole.ASSISTANT,
+                content="您的请求已提交人工审核，审核结果将稍后通知。",
+                agent_name="supervisor",
+            )
+            await store.save_message(session_id, pending_msg)
+            await store.update_session(
+                session_id,
+                status=ConversationStatus.AWAITING_REVIEW.value,
+                active_agent="supervisor",
+            )
+            response.status_code = 202
+            return ChatAcceptedResponse(
+                session_id=session_id,
+                thread_id=thread_id,
+                status=ConversationStatus.AWAITING_REVIEW.value,
+            )
 
         # 提取结果
         reply = final_state.get("final_reply", "")
@@ -231,6 +263,32 @@ async def chat_stream(
                 }, ensure_ascii=False, default=str),
             }
 
+        except GraphInterrupt:
+            # HITL 挂起：SSE 无法恢复推送，提示客户端轮询审核状态接口
+            pending_msg = Message(
+                role=MessageRole.ASSISTANT,
+                content="您的请求已提交人工审核，审核结果将稍后通知。",
+                agent_name="supervisor",
+            )
+            store = get_storage()
+            await store.save_message(session_id, pending_msg)
+            await store.update_session(
+                session_id,
+                status=ConversationStatus.AWAITING_REVIEW.value,
+                active_agent="supervisor",
+            )
+            yield {
+                "event": "awaiting_review",
+                "data": json.dumps({
+                    "status": "awaiting_review",
+                    "session_id": session_id,
+                    "thread_id": thread_id,
+                    "message": "您的请求已提交人工审核，审核结果将稍后通知。",
+                    "poll_url": f"/chat/{session_id}/review/{thread_id}",
+                }, ensure_ascii=False),
+            }
+            return
+
         except Exception as e:
             logger.exception(f"SSE 流异常: {e}")
             yield {
@@ -257,6 +315,59 @@ async def get_history(session_id: str, _auth: str = Depends(require_agent)) -> H
         session_id=session_id,
         messages=messages,
         total=len(messages),
+    )
+
+
+# ============================================================
+# HITL 审核状态查询
+# ============================================================
+
+@router.get(
+    "/chat/{session_id}/review/{thread_id}",
+    response_model=ReviewResultResponse,
+    summary="查询人工审核进展与终局回复",
+)
+async def get_review_result(
+    session_id: str,
+    thread_id: str,
+    _auth: str = Depends(require_agent),
+) -> ReviewResultResponse:
+    """客户侧轮询接口：获取 HITL 审核状态（挂起/已审批/驳回）与最终回复"""
+    from src.api.review_store import get_review
+
+    review = await get_review(thread_id)
+    if review is None:
+        raise HTTPException(status_code=404, detail=f"未找到审核案例: {thread_id}")
+
+    status = review.get("status", "pending")
+    reviewed = status in ("approved", "rejected")
+
+    # 终局回复：优先取会话历史中 supervisor 的最终答复，其次取决策中的回复
+    final_reply = None
+    if reviewed:
+        store = get_storage()
+        history = await store.get_history(session_id, limit=20)
+        for m in reversed(history):
+            if m.get("role") == MessageRole.ASSISTANT.value and m.get("agent_name") in (
+                "supervisor", "human_handoff",
+            ):
+                final_reply = m.get("content", "")
+                break
+        if not final_reply:
+            decision = review.get("decision") or {}
+            if status == "rejected":
+                note = review.get("reviewer_note") or "需进一步核实"
+                final_reply = f"您的请求已提交人工审核。审核意见：{note}。我们将在24小时内与您联系。"
+            else:
+                final_reply = decision.get("reply_to_customer") or "您的请求已处理完成。"
+
+    return ReviewResultResponse(
+        session_id=session_id,
+        thread_id=thread_id,
+        review_status=status,
+        review_type=review.get("review_type", "supervisor_decision"),
+        reviewed=reviewed,
+        final_reply=final_reply,
     )
 
 

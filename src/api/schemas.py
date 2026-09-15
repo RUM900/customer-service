@@ -64,6 +64,25 @@ class ChatResponse(BaseModel):
     errors: list[dict] = Field(default_factory=list)
 
 
+class ChatAcceptedResponse(BaseModel):
+    """HITL 中断后的受理响应（202 Accepted）"""
+    session_id: str
+    thread_id: str
+    status: str = "awaiting_review"
+    reply: str = "您的请求已提交人工审核，审核结果将稍后通知。"
+    review_id: Optional[str] = Field(default=None, description="审核单 ID")
+
+
+class ReviewResultResponse(BaseModel):
+    """客户侧审核状态查询响应"""
+    session_id: str
+    thread_id: str
+    review_status: str = Field(description="pending/approved/rejected")
+    review_type: str = Field(default="supervisor_decision")
+    reviewed: bool = False
+    final_reply: Optional[str] = Field(default=None, description="审核终局回复（已结束后提供）")
+
+
 class SessionResponse(BaseModel):
     """会话信息响应"""
     session_id: str

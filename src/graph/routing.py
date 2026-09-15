@@ -125,7 +125,7 @@ def route_after_supervisor(state: dict) -> str:
 
     - resolve → __end__
     - escalate_to_human → human_handoff
-    - coordinate → 回到对应的 specialist（通过 specialist_agent 字段）
+    - coordinate → 真正的跨域协调：优先路由到 coordinate_agents 指定的其他 specialist
     - reject → __end__（supersedes specialist）
     """
     decision = state.get("supervisor_decision")
@@ -139,9 +139,18 @@ def route_after_supervisor(state: dict) -> str:
         return "human_handoff"
 
     if action == "coordinate":
-        # 跨域协调 -> 去另一个 specialist
-        specialist = state.get("specialist_agent", "technical")
-        return specialist
+        # 跨域协调 -> 优先路由到 coordinate_agents 指定的其他 specialist
+        coordinated = set(state.get("coordinated_agents") or [])
+        current = state.get("specialist_agent", "technical")
+        valid = {"technical", "billing", "product", "complaint"}
+
+        targets = decision.get("coordinate_agents") or []
+        for target in targets:
+            if target in valid and target != current and target not in coordinated:
+                return target
+
+        # 所有目标都已协调过或无效 → 结束本轮（防死循环）
+        return "__end__"
 
     # resolve / reject → 结束
     return "__end__"

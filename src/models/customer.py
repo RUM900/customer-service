@@ -80,10 +80,12 @@ class TicketPriority(str, Enum):
 class TicketStatus(str, Enum):
     """工单状态"""
     OPEN = "open"
+    ASSIGNED = "assigned"       # 已指派给坐席
     IN_PROGRESS = "in_progress"
     WAITING_CUSTOMER = "waiting_customer"
     RESOLVED = "resolved"
     CLOSED = "closed"
+    CANCELLED = "cancelled"     # 已驳回/取消
 
 
 class Ticket(BaseModel):

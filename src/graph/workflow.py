@@ -426,6 +426,11 @@ async def specialist_node(state: dict, agent_name: str) -> dict:
             "current_tier": Tier.SPECIALIST.value,
         }
 
+        # 跨域协调场景：记录当前已协调的 specialist（防止重复协调）
+        coordinated = state.get("coordinated_agents") or []
+        if agent_name not in coordinated:
+            result["coordinated_agents"] = [agent_name]
+
         if response.is_resolved:
             result["status"] = ConversationStatus.RESOLVED.value
             result["final_reply"] = response.reply_to_customer
@@ -617,6 +622,7 @@ async def supervisor_node(state: dict) -> dict:
                 "escalation_reason": escalation_reason,
                 "message": f"人工审核请求: {decision.reasoning}",
                 "review_items": decision.review_items,
+                "handoff_summary": decision.handoff_summary or "",
             }
             # 加入审核队列（用每轮独立 thread_id，管理员据此恢复图执行）
             thread_id = state.get("thread_id") or state.get("session_id", "unknown")
@@ -632,6 +638,30 @@ async def supervisor_node(state: dict) -> dict:
                     f"我们将在24小时内与您联系。"
                 )
 
+        # 落地 should_create_ticket：主管裁决产生赔付/大额退款时自动建单
+        ticket_id = ""
+        if decision.should_create_ticket:
+            try:
+                from src.api.storage import get_storage
+                store = get_storage()
+                ticket = await store.create_ticket(
+                    session_id=state.get("session_id", "unknown"),
+                    subject=f"主管裁决: {decision.action} — {escalation_reason[:60]}",
+                    description=(
+                        f"升级来源: {specialist_agent}\n"
+                        f"裁决: {decision.action}\n"
+                        f"理由: {decision.reasoning}\n"
+                        f"终局方案: {decision.final_solution}\n"
+                        f"补偿: {decision.compensation}"
+                    ),
+                    customer_id=state.get("customer_id", ""),
+                    priority="high",
+                )
+                ticket_id = ticket.ticket_id
+                logger.info(f"[Supervisor] 自动建单: {ticket_id}")
+            except Exception as ex:
+                logger.warning(f"[Supervisor] 自动建单失败: {ex}")
+
         result = {
             "supervisor_decision": decision.model_dump(),
             "active_agent": "supervisor",
@@ -639,6 +669,11 @@ async def supervisor_node(state: dict) -> dict:
         }
 
         if decision.action in ("resolve", "reject"):
+            # 如果建单成功，在回复中附上工单号
+            if ticket_id:
+                decision.reply_to_customer = (
+                    f"{decision.reply_to_customer}\n\n已为您生成处理单号: {ticket_id}，可随时查询处理进度。"
+                )
             assistant_msg = Message(
                 role=MessageRole.ASSISTANT,
                 content=decision.reply_to_customer,
@@ -658,6 +693,8 @@ async def supervisor_node(state: dict) -> dict:
         elif decision.action == "escalate_to_human":
             result["escalation_reason"] = decision.reasoning
             result["escalation_count"] = state.get("escalation_count", 0) + 1
+            # 落地 handoff_summary：透传给转人工节点
+            result["handoff_summary"] = decision.handoff_summary or decision.reasoning
 
         return result
 
@@ -684,26 +721,52 @@ async def human_handoff_node(state: dict) -> dict:
 
     转人工前先加入人工审核队列（review_type=human_handoff）。
     图不暂停，客户立即收到"申请已提交"反馈，管理员从审核队列批准/驳回。
+    同时自动创建高优先级工单，实现真实坐席承接。
     """
     reason = state.get("escalation_reason", "客户要求转人工")
+    handoff_summary = state.get("handoff_summary", "") or reason
     session_id = state.get("session_id", "unknown")
     thread_id = state.get("thread_id") or session_id
     logger.warning(f"[HumanHandoff] 转人工申请: {reason[:80]}")
+
+    # 自动创建高优先级工单，实现真实人工承接
+    ticket_id = ""
+    try:
+        from src.api.storage import get_storage
+
+        store = get_storage()
+        ticket = await store.create_ticket(
+            session_id=session_id,
+            subject=f"人工转接: {reason[:80]}",
+            description=handoff_summary[:2000],
+            customer_id=state.get("customer_id", ""),
+            priority="high",
+        )
+        ticket_id = ticket.ticket_id
+        logger.info(f"[HumanHandoff] 自动建单成功: {ticket_id}")
+    except Exception as e:
+        logger.error(f"[HumanHandoff] 自动建单失败: {e}")
 
     # 加入人工审核队列（DB 持久化，内存兜底）
     try:
         from src.api.review_store import add_review
 
-        await add_review(thread_id, {
+        review_context = {
             "session_id": session_id,
             "review_type": "human_handoff",
             "message": f"客户要求转人工: {reason}",
             "review_items": ["客户主动要求人工客服", f"原因: {reason[:200]}"],
-        })
+            "handoff_summary": handoff_summary[:600],
+            "ticket_id": ticket_id,
+        }
+        await add_review(thread_id, review_context)
     except Exception as e:
         logger.error(f"[HumanHandoff] 审核入队失败: {e}")
 
-    handoff_msg = "您的转人工申请已提交，请稍候，客服主管会尽快处理。"
+    handoff_msg = (
+        f"您的转人工申请已提交，请稍候，客服主管会尽快处理。"
+        + (f"\n（工单号: {ticket_id}，可凭单号查询进度）" if ticket_id else "")
+    )
 
     assistant_msg = Message(
         role=MessageRole.ASSISTANT,
@@ -717,6 +780,7 @@ async def human_handoff_node(state: dict) -> dict:
         "status": ConversationStatus.HANDOFF.value,
         "current_tier": Tier.HUMAN.value,
         "active_agent": "human_handoff",
+        "handoff_ticket_id": ticket_id,
         "resolution": Resolution(
             resolution_type=ResolutionType.HUMAN_RESOLVED,
             summary=f"转人工申请待审核: {reason}",

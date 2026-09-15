@@ -136,6 +136,30 @@ class TicketStore:
         await self.db.flush()
         return self._row_to_model(row)
 
+    async def update_status(
+        self,
+        ticket_id: str,
+        status: TicketStatus,
+        assigned_agent: Optional[str] = None,
+        resolution: Optional[str] = None,
+    ) -> Optional[Ticket]:
+        """更新工单状态（指派 / 流转 / 取消）"""
+        row = await self.db.get(TicketRow, ticket_id)
+        if row is None:
+            return None
+
+        row.status = status.value
+        if assigned_agent is not None:
+            row.assigned_agent = assigned_agent
+        if resolution is not None:
+            row.resolution = resolution
+        if status in (TicketStatus.CLOSED, TicketStatus.CANCELLED):
+            row.closed_at = datetime.now().isoformat()
+        row.updated_at = datetime.now().isoformat()
+
+        await self.db.flush()
+        return self._row_to_model(row)
+
     # ----------------------------------------------------------
     # Helpers
     # ----------------------------------------------------------

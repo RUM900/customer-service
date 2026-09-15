@@ -203,15 +203,56 @@ class TestSupervisorRouting:
         assert result == "human_handoff"
 
     def test_coordinate(self):
-        """跨域协调 → 回到 specialist"""
+        """跨域协调 → 路由到 coordinate_agents 指定的其他 specialist"""
         state = {
             "supervisor_decision": {
                 "action": "coordinate",
+                "coordinate_agents": ["technical"],
             },
             "specialist_agent": "billing",
+            "coordinated_agents": [],
         }
         result = route_after_supervisor(state)
-        assert result == "billing"
+        assert result == "technical"
+
+    def test_coordinate_skip_current(self):
+        """跨域协调 → 不会路由回当前 specialist"""
+        state = {
+            "supervisor_decision": {
+                "action": "coordinate",
+                "coordinate_agents": ["billing"],
+            },
+            "specialist_agent": "billing",
+            "coordinated_agents": [],
+        }
+        result = route_after_supervisor(state)
+        assert result == "__end__"
+
+    def test_coordinate_no_targets(self):
+        """跨域协调无有效目标 → 结束（防死循环）"""
+        state = {
+            "supervisor_decision": {
+                "action": "coordinate",
+                "coordinate_agents": [],
+            },
+            "specialist_agent": "billing",
+            "coordinated_agents": [],
+        }
+        result = route_after_supervisor(state)
+        assert result == "__end__"
+
+    def test_coordinate_already_done(self):
+        """目标已协调过 → 结束（防重复协调）"""
+        state = {
+            "supervisor_decision": {
+                "action": "coordinate",
+                "coordinate_agents": ["complaint"],
+            },
+            "specialist_agent": "billing",
+            "coordinated_agents": ["complaint"],
+        }
+        result = route_after_supervisor(state)
+        assert result == "__end__"
 
     def test_no_decision(self):
         """无 decision → END"""

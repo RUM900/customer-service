@@ -35,6 +35,8 @@ class ReviewRow(Base):
     review_items_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
     message: Mapped[str] = mapped_column(Text, default="")
+    handoff_summary: Mapped[str] = mapped_column(Text, default="")
+    ticket_id: Mapped[str] = mapped_column(String(64), default="", index=True)
     reviewer_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[str] = mapped_column(String(64))
     reviewed_at: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
@@ -60,6 +62,8 @@ class ReviewStore:
             else None,
             status="pending",
             message=review.get("message", ""),
+            handoff_summary=review.get("handoff_summary", ""),
+            ticket_id=review.get("ticket_id", ""),
             created_at=datetime.now().isoformat(),
         )
         self.db.add(row)
@@ -136,6 +140,8 @@ class ReviewStore:
             "review_items": items,
             "status": row.status,
             "message": row.message,
+            "handoff_summary": row.handoff_summary,
+            "ticket_id": row.ticket_id,
             "reviewer_note": row.reviewer_note,
             "created_at": row.created_at,
             "reviewed_at": row.reviewed_at,

@@ -32,6 +32,7 @@ class ConversationStatus(str, Enum):
     RESOLVED = "resolved"        # 已解决
     ESCALATED = "escalated"      # 已升级
     HANDOFF = "handoff"          # 已转人工
+    AWAITING_REVIEW = "awaiting_review"  # 待人工审核（HITL 挂起中）
     CLOSED = "closed"            # 已关闭
     ERROR = "error"              # 异常
 

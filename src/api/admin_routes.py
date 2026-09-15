@@ -15,10 +15,95 @@ from pydantic import BaseModel, Field
 
 from src.api.deps import get_knowledge_store
 from src.api.auth import require_admin
+from src.api.storage import get_storage
+from src.models.conversation import Message, MessageRole
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/knowledge", tags=["知识库管理"])
+
+
+# ============================================================
+# HITL 辅助函数
+# ============================================================
+
+async def _update_ticket(store, ticket_id: str, status, assignee: Optional[str] = None, resolution: Optional[str] = None):
+    """更新工单状态（DB 优先，内存兜底）"""
+    try:
+        from src.memory.database import get_session_factory
+        from src.memory.ticket_store import TicketStore
+
+        factory = get_session_factory()
+        async with factory() as db:
+            result = await TicketStore(db).update_status(
+                ticket_id, status, assigned_agent=assignee, resolution=resolution,
+            )
+            if result is not None:
+                await db.commit()
+                return result
+    except Exception as e:
+        logger.warning(f"HITL: 工单 DB 更新失败: {e}")
+
+    # 内存兜底：直接改内存工单
+    try:
+        ticket = await store.get_ticket(ticket_id)
+        if ticket is None:
+            return None
+        ticket.status = status
+        if assignee:
+            ticket.assigned_agent = assignee
+        if resolution:
+            ticket.resolution = resolution
+        return ticket
+    except Exception:
+        return None
+
+
+async def _persist_review_result(
+    review: dict,
+    final_state: dict,
+    approved: bool,
+    note: str,
+) -> Optional[str]:
+    """
+    将 HITL 审批后的最终回复持久化回会话历史
+
+    - 优先使用图恢复后的 final_state.final_reply
+    - 图恢复失败时，用审核单里的决策数据 fallback 生成回复
+    """
+    session_id = final_state.get("session_id") or review.get("session_id")
+    if not session_id:
+        return None
+
+    reply = final_state.get("final_reply") or ""
+    status = final_state.get("status") or "resolved"
+    agent_name = final_state.get("active_agent") or "supervisor"
+
+    # Fallback：图恢复失败时从审核单生成回复
+    if not reply:
+        decision = review.get("decision") or {}
+        if approved:
+            reply = decision.get("reply_to_customer") or "您的请求已处理完成。"
+        else:
+            reply = (
+                f"您的请求已提交人工审核。审核意见：{note or '需进一步核实'}。"
+                "我们将在24小时内与您联系。"
+            )
+
+    try:
+        store = get_storage()
+        assistant_msg = Message(
+            role=MessageRole.ASSISTANT,
+            content=reply,
+            agent_name=agent_name,
+        )
+        await store.save_message(session_id, assistant_msg)
+        await store.update_session(session_id, status=status, active_agent=agent_name)
+        logger.info(f"HITL: 审批结果已回写会话 {session_id}（approved={approved}）")
+        return reply
+    except Exception as e:
+        logger.error(f"HITL: 审批结果回写失败: {e}")
+        return None
 
 
 # ============================================================
@@ -225,36 +310,60 @@ async def get_review(thread_id: str, _auth: str = Depends(require_admin)):
     "/reviews/{thread_id}/approve",
     summary="批准审核",
 )
-async def approve_review(thread_id: str, note: str = "", _auth: str = Depends(require_admin)):
+async def approve_review(
+    thread_id: str,
+    note: str = "",
+    assignee: str = "",
+    _auth: str = Depends(require_admin),
+):
     """
     批准人工审核案例
 
-    批准后 Supervisor 的决策生效（退款/补偿等）。
-    如果图仍在内存中（同一进程），自动恢复执行。
+    - supervisor_decision：恢复图执行，并把最终回复持久化回会话历史
+    - human_handoff：工单流转为已指派（assigned），指定坐席（可选）
     """
     from src.api.review_store import approve_review
     review = await approve_review(thread_id, note)
     if review is None:
         raise HTTPException(status_code=404, detail=f"未找到待审核案例: {thread_id}")
 
-    # 转人工审核：图未暂停，无需恢复执行
+    # 转人工审核：图未暂停，无需恢复执行，只需流转工单
     if review.get("review_type") == "human_handoff":
-        return {"status": "approved", "thread_id": thread_id}
+        ticket_id = review.get("ticket_id")
+        if ticket_id:
+            try:
+                store = get_storage()
+                from src.models.customer import TicketStatus
+                await _update_ticket(store, ticket_id, TicketStatus.ASSIGNED, assignee=assignee or None)
+            except Exception as e:
+                logger.warning(f"HITL: 工单流转失败 ticket={ticket_id}: {e}")
+        return {"status": "approved", "thread_id": thread_id, "ticket_id": ticket_id}
 
     # 尝试恢复图执行（supervisor 高风险决策的 interrupt 挂起）
+    final_state = {}
     try:
         from src.api.deps import get_graph
         graph = await get_graph()
         from langgraph.types import Command
         config = {"configurable": {"thread_id": thread_id}}
-        # 注入批准指令
-        await graph.ainvoke(
+        # 注入批准指令，并捕获恢复后的最终状态
+        result = await graph.ainvoke(
             Command(resume={"approved": True, "note": note}),
             config,
         )
+        if isinstance(result, dict):
+            final_state = result
         logger.info(f"HITL: 图已恢复执行 thread={thread_id}")
     except Exception as e:
         logger.warning(f"HITL: 图恢复失败（可能在另一个进程）: {e}")
+
+    # 将最终回复持久化回会话历史（图恢复失败时用审核单数据 fallback）
+    await _persist_review_result(
+        review=review,
+        final_state=final_state,
+        approved=True,
+        note=note,
+    )
 
     return {"status": "approved", "thread_id": thread_id}
 
@@ -267,29 +376,49 @@ async def reject_review(thread_id: str, reason: str = "", _auth: str = Depends(r
     """
     驳回人工审核案例
 
-    驳回后 Supervisor 决策被覆盖，回复客户"需要进一步核实"。
+    - supervisor_decision：图恢复并覆盖为 reject，最终回复回写会话
+    - human_handoff：工单关闭（cancelled）
     """
     from src.api.review_store import reject_review
     review = await reject_review(thread_id, reason)
     if review is None:
         raise HTTPException(status_code=404, detail=f"未找到待审核案例: {thread_id}")
 
-    # 转人工审核：图未暂停，无需恢复执行
+    # 转人工审核：图未暂停，无需恢复执行，只需关闭工单
     if review.get("review_type") == "human_handoff":
-        return {"status": "rejected", "thread_id": thread_id, "reason": reason}
+        ticket_id = review.get("ticket_id")
+        if ticket_id:
+            try:
+                store = get_storage()
+                from src.models.customer import TicketStatus
+                await _update_ticket(store, ticket_id, TicketStatus.CANCELLED, resolution=reason or "转人工申请未通过")
+            except Exception as e:
+                logger.warning(f"HITL: 工单关闭失败 ticket={ticket_id}: {e}")
+        return {"status": "rejected", "thread_id": thread_id, "reason": reason, "ticket_id": ticket_id}
 
     # 尝试恢复图执行（supervisor 高风险决策的 interrupt 挂起）
+    final_state = {}
     try:
         from src.api.deps import get_graph
         graph = await get_graph()
         from langgraph.types import Command
         config = {"configurable": {"thread_id": thread_id}}
-        await graph.ainvoke(
+        result = await graph.ainvoke(
             Command(resume={"approved": False, "note": reason}),
             config,
         )
+        if isinstance(result, dict):
+            final_state = result
         logger.info(f"HITL: 图已恢复(驳回) thread={thread_id}")
     except Exception as e:
         logger.warning(f"HITL: 图恢复失败: {e}")
+
+    # 将最终回复持久化回会话历史（图恢复失败时用审核单数据 fallback）
+    await _persist_review_result(
+        review=review,
+        final_state=final_state,
+        approved=False,
+        note=reason,
+    )
 
     return {"status": "rejected", "thread_id": thread_id, "reason": reason}
