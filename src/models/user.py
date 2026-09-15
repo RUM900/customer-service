@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 class UserRole(str, Enum):
     """用户角色"""
     ADMIN = "admin"
+    AGENT = "agent"       # 客服坐席（会话队列/回复/Copilot，无配置权限）
     CUSTOMER = "customer"
 
 

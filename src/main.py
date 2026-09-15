@@ -65,8 +65,9 @@ async def lifespan(app: FastAPI):
 
     # === 种子默认管理员账号 ===
     try:
-        from src.memory.user import seed_admin
+        from src.memory.user import seed_admin, seed_agent
         await seed_admin()
+        await seed_agent()
     except Exception as e:
         logger.warning(f"管理员账号初始化失败: {e}")
 
@@ -131,6 +132,8 @@ from src.api.admin_routes import router as admin_router
 app.include_router(admin_router)
 from src.api.admin_auth_routes import router as admin_auth_router
 app.include_router(admin_auth_router)
+from src.api.agent_routes import router as agent_router
+app.include_router(agent_router)
 
 
 # ============================================================
@@ -150,6 +153,14 @@ async def admin_ui():
     """内置管理后台界面"""
     from pathlib import Path
     html_path = Path(__file__).parent / "static" / "admin.html"
+    return html_path.read_text(encoding="utf-8")
+
+
+@app.get("/agent", response_class=HTMLResponse)
+async def agent_ui():
+    """内置坐席工作台界面"""
+    from pathlib import Path
+    html_path = Path(__file__).parent / "static" / "agent.html"
     return html_path.read_text(encoding="utf-8")
 
 

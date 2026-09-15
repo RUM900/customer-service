@@ -97,6 +97,16 @@ async def chat(
         # 保存用户消息
         user_msg = Message(role=MessageRole.USER, content=clean_message)
         await store.save_message(session_id, user_msg)
+        # 广播给坐席订阅者（坐席工作台实时刷新）
+        try:
+            from src.api.agent_routes import publish_session_event
+            await publish_session_event(session_id, "customer_message", {
+                "session_id": session_id,
+                "content": clean_message,
+                "role": "user",
+            })
+        except Exception as broadcast_err:
+            logger.warning(f"广播客户消息失败: {broadcast_err}")
 
         # 每轮独立 thread_id（HITL 恢复键）
         thread_id = _new_thread_id(session_id)
@@ -151,6 +161,18 @@ async def chat(
             status=status,
             active_agent=agent_name,
         )
+
+        # 广播给坐席订阅者（机器人处理结果 + 状态变化）
+        try:
+            from src.api.agent_routes import publish_session_event
+            await publish_session_event(session_id, "agent_reply", {
+                "session_id": session_id,
+                "content": reply,
+                "agent_name": agent_name or "bot",
+                "status": status,
+            })
+        except Exception as broadcast_err:
+            logger.warning(f"广播机器人回复失败: {broadcast_err}")
 
         errors = final_state.get("errors", []) or []
         if isinstance(errors, list) and errors:

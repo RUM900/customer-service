@@ -88,6 +88,42 @@ async def login(req: LoginRequest):
     )
 
 
+@router.post("/staff/login", response_model=TokenResponse, summary="坐席/员工登录")
+async def staff_login(req: LoginRequest):
+    """坐席工作台登录：admin / agent 角色均可"""
+    from src.memory.database import get_session_factory
+    from src.memory.user import UserStore, verify_password
+
+    async with get_session_factory()() as db:
+        try:
+            store = UserStore(db)
+            user = await store.get_by_username(req.username)
+            if user is None or not verify_password(req.password, user.password_hash):
+                raise HTTPException(status_code=401, detail="用户名或密码错误")
+            if user.role not in (UserRole.ADMIN, UserRole.AGENT):
+                raise HTTPException(status_code=403, detail="无权访问坐席工作台")
+            await store.update_last_login(user.user_id)
+            await db.commit()
+        except HTTPException:
+            raise
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"坐席登录失败: {e}")
+            raise HTTPException(status_code=500, detail="登录服务异常")
+
+    token = create_token(user.user_id, user.username, user.role.value)
+    return TokenResponse(
+        access_token=token,
+        expires_in=config.JWT_EXPIRE_HOURS * 3600,
+        user={
+            "user_id": user.user_id,
+            "username": user.username,
+            "role": user.role.value,
+            "display_name": user.display_name,
+        },
+    )
+
+
 @router.get("/me", summary="当前管理员信息")
 async def me(_auth: str = Depends(require_admin)):
     return {"status": "ok", "role": "admin"}

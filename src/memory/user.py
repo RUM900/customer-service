@@ -121,3 +121,35 @@ async def seed_admin() -> None:
         except Exception as e:
             await db.rollback()
             logger.error(f"管理员种子失败: {e}")
+
+
+async def seed_agent() -> None:
+    """幂等创建默认坐席账号（用于坐席工作台试用）"""
+    import config
+    from src.memory.database import get_session_factory
+
+    username = config.AGENT_USERNAME
+    password = config.AGENT_PASSWORD
+    if not username or not password:
+        logger.warning("未配置 AGENT_USERNAME/AGENT_PASSWORD，跳过坐席种子")
+        return
+
+    factory = get_session_factory()
+    async with factory() as db:
+        try:
+            store = UserStore(db)
+            existing = await store.get_by_username(username)
+            if existing:
+                return
+            user = User(
+                username=username,
+                password_hash=hash_password(password),
+                role=UserRole.AGENT,
+                display_name="坐席",
+            )
+            await store.create(user)
+            await db.commit()
+            logger.info(f"已创建默认坐席账号: {username}")
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"坐席种子失败: {e}")

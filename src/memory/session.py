@@ -113,6 +113,28 @@ class SessionStore:
         result = await self.db.execute(stmt)
         return [self._row_to_model(row) for row in result.scalars().all()]
 
+    async def list_by_status(
+        self,
+        status: Optional[str] = None,
+        limit: int = 50,
+    ) -> list[SessionModel]:
+        """按状态查询会话（坐席队列用）"""
+        stmt = select(SessionRow)
+        if status:
+            stmt = stmt.where(SessionRow.status == status)
+        stmt = stmt.order_by(SessionRow.updated_at.desc()).limit(limit)
+        result = await self.db.execute(stmt)
+        return [self._row_to_model(row) for row in result.scalars().all()]
+
+    async def count_by_status(self, status: Optional[str] = None) -> int:
+        """按状态统计会话数（队列角标用）"""
+        from sqlalchemy import func
+        stmt = select(func.count()).select_from(SessionRow)
+        if status:
+            stmt = stmt.where(SessionRow.status == status)
+        result = await self.db.execute(stmt)
+        return int(result.scalar() or 0)
+
     # ----------------------------------------------------------
     # Helpers
     # ----------------------------------------------------------

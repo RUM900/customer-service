@@ -139,6 +139,10 @@ JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
+# 坐席工作台默认账号（role=agent，仅能处理会话/回复，无配置权限）
+AGENT_USERNAME = os.getenv("AGENT_USERNAME", "agent")
+AGENT_PASSWORD = os.getenv("AGENT_PASSWORD", "agent123")
+
 # 模型配置校验开关（管理员修改模型名时是否调用 LLM 探活）
 MODEL_VALIDATION_ENABLED = os.getenv("MODEL_VALIDATION_ENABLED", "true").lower() in ("true", "1", "yes")
 

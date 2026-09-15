@@ -195,6 +195,7 @@ make run
 
 - **Web 聊天界面**: http://localhost:8000/
 - **管理后台**: http://localhost:8000/admin （默认账号 `admin` / `admin123`，建议首次登录后修改）
+- **坐席工作台**: http://localhost:8000/agent （默认坐席账号 `agent` / `agent123`）
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
 - **健康检查**: http://localhost:8000/health
@@ -289,6 +290,36 @@ curl -X POST http://localhost:8000/admin/knowledge/copilot/assist \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"session_id": "sess_abc123", "customer_message": "我的订单还没到，很着急！", "agent_draft": ""}'
+```
+
+### 坐席工作台 API（role=agent 或 admin，登录 `/admin/staff/login`）
+
+```bash
+# 1. 坐席登录（签发 JWT，角色 agent/admin）
+curl -X POST http://localhost:8000/admin/staff/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "agent", "password": "agent123"}'
+
+# 2. 会话队列（默认拉取转人工+待审核，带角标统计）
+curl http://localhost:8000/agent/conversations \
+  -H "Authorization: Bearer <token>"
+
+# 3. 会话详情（历史消息 + 客户画像）
+curl http://localhost:8000/agent/conversations/{session_id} \
+  -H "Authorization: Bearer <token>"
+
+# 4. 坐席回复（直接入库，不重跑 LangGraph；可标记已解决）
+curl -X POST http://localhost:8000/agent/conversations/{session_id}/reply \
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"content": "您好，我来帮您处理。", "mark_resolved": false}'
+
+# 5. SSE 实时订阅（客户新消息/坐席回复/状态变化实时推送）
+curl -N "http://localhost:8000/agent/conversations/{session_id}/stream?api_key=<token>"
+
+# 6. 坐席侧 Copilot（自动带上下文）
+curl -X POST http://localhost:8000/agent/conversations/{session_id}/copilot \
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"session_id": "{session_id}", "customer_message": "我的订单还没到，很着急！"}'
 ```
 
 ## Docker 部署

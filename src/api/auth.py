@@ -247,3 +247,51 @@ async def require_user(request: Request) -> str:
     if not config.AUTH_ENABLED:
         return "auth_disabled"
     return await require_agent(request)
+
+
+async def require_staff(request: Request) -> str:
+    """
+    验证客服员工身份（管理员 或 坐席 agent）— 用于坐席工作台端点
+
+    - 角色 admin / agent 均可访问会话队列、回复、Copilot
+    - 无 JWT 时支持回落 Admin API Key（兼容旧管理端）与 ?api_key= 查询参数（SSE 场景）
+    """
+    token = get_bearer_token(request)
+    if token:
+        payload = decode_token(token)
+        if payload and payload.get("role") in ("admin", "agent"):
+            return f"staff_authenticated:{payload.get('role')}"
+        raise HTTPException(
+            status_code=401,
+            detail="无效或已过期的令牌（需要 admin 或 agent 角色）",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # 无 JWT 时回落 Admin API Key
+    if not config.AUTH_ENABLED:
+        return "auth_disabled"
+
+    # SSE/EventSource 无法设置 header：支持 ?api_key= 携带 JWT 或 API Key
+    query_token = request.query_params.get("api_key")
+    if query_token:
+        payload = decode_token(query_token)
+        if payload and payload.get("role") in ("admin", "agent"):
+            return f"staff_authenticated:{payload.get('role')}:query"
+
+    expected_admin_key = config.ADMIN_API_KEY or config.API_KEY
+    if not expected_admin_key:
+        return "admin_key_not_configured"
+
+    provided_key = _extract_admin_key(request)
+    # SSE/EventSource 无法设置 header，支持 ?api_key= 查询参数（仅限 API Key）
+    if not provided_key:
+        provided_key = query_token
+    if not provided_key or not secrets.compare_digest(
+        provided_key.encode(), expected_admin_key.encode()
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="未提供有效的管理凭证（Bearer token 或 X-Admin-API-Key）",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return "staff_authenticated:api_key"
