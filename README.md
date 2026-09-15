@@ -98,16 +98,16 @@ flowchart TD
 
 ### Agent 层级
 
-| 层级 | Agent | 职责 | 默认模型 |
-|------|-------|------|---------|
-| Tier 1 | **TriageAgent** | 意图识别、情感分析、紧急度判断、路由决策 | qwen-turbo |
-| Tier 2 | **TechnicalAgent** | 技术问题诊断、排查指导、订单状态查询 | qwen-turbo |
-| Tier 2 | **BillingAgent** | 账单查询、退款处理、账户管理 | qwen-turbo |
-| Tier 2 | **ProductAgent** | 产品咨询、对比推荐、使用指导 | qwen-turbo |
-| Tier 2 | **ComplaintAgent** | 投诉处理、情绪安抚、补偿方案 | qwen-turbo |
-| Tier 3 | **SupervisorAgent** | 升级审核、终局决策、人工转接判定 | qwen-plus |
+| 层级 | Agent | 职责 |
+|------|-------|------|
+| Tier 1 | **TriageAgent** | 意图识别、情感分析、紧急度判断、路由决策 |
+| Tier 2 | **TechnicalAgent** | 技术问题诊断、排查指导、订单状态查询 |
+| Tier 2 | **BillingAgent** | 账单查询、退款处理、账户管理 |
+| Tier 2 | **ProductAgent** | 产品咨询、对比推荐、使用指导 |
+| Tier 2 | **ComplaintAgent** | 投诉处理、情绪安抚、补偿方案 |
+| Tier 3 | **SupervisorAgent** | 升级审核、终局决策、人工转接判定 |
 
-> 模型分层策略：分诊/处理用快模型（成本优先），主管决策用强模型（效果优先）；可在管理后台热更新，无需重启。
+> 模型分层策略：支持按 Agent 灵活配置差异化模型（分诊/处理用高性价比快模型，主管决策用高推理模型），可在管理后台热更新，无需重启。
 
 ### 端到端协同与 HITL 流程示例
 
