@@ -56,8 +56,10 @@ MODEL_SPECIALIST = os.getenv("MODEL_SPECIALIST", "qwen-turbo")
 # Supervisor Agent: 复杂决策，需要最强模型
 MODEL_SUPERVISOR = os.getenv("MODEL_SUPERVISOR", "qwen-plus")
 
-# FAQ Embedding 模型（DashScope 中文向量模型）
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-v1")
+# FAQ Embedding 模型
+# 注意: qwen3.7-text-embedding-flash 输出 1024 维（旧 text-embedding-v1 为 1536 维）
+# 更换后必须重建 ChromaDB 集合，否则向量维度冲突
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "qwen3.7-text-embedding-flash")
 
 # ============================================================
 # LLM 参数

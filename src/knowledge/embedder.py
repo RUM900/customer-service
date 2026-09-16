@@ -1,11 +1,13 @@
 """
 Embedding 抽象层 — 文本转向量
 
-通过 DashScope 文本向量模型（text-embedding-v1）经 OpenAI 兼容接口调用。
+通过 DashScope 文本向量模型（默认 qwen3.7-text-embedding-flash, 1024维）
+经 OpenAI 兼容接口调用。
 
 设计:
 - 同步实现（ChromaDB 是同步 API，配合 VectorStore 显式传 embeddings）
 - 索引与查询使用同一模型，保证向量空间一致
+- 更换模型后必须重建 ChromaDB 集合（维度变化会冲突）
 """
 import logging
 
