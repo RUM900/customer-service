@@ -287,4 +287,6 @@ async def agent_copilot(
         suggested_reply=core.suggested_reply,
         context_summary=core.context_summary,
         suggested_tools=core.suggested_tools,
+        risk_flags=core.risk_flags,
+        log_id=core.log_id,
     )
