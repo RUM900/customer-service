@@ -281,6 +281,8 @@ async function sendReply() {
       method: 'POST',
       body: JSON.stringify({ content: content, mark_resolved: document.getElementById('markResolved').checked })
     });
+    // Copilot 采纳打点（若采纳过建议）
+    await reportAdoption(content);
     document.getElementById('replyInput').value = '';
     showMsg('回复已发送');
     api('/agent/conversations/' + currentSession).then(function(d) { renderMessages(d.messages || []); }).catch(function(){});
@@ -311,6 +313,8 @@ async function regenerateCopilot() {
       return '<span class="tag" onclick="fillToolQuery(\'' + t + '\')">🔧 ' + t + '</span>';
     }).join('');
     window._copilotReply = data.suggested_reply || '';
+    window._copilotLogId = data.log_id || '';
+    window._copilotAdopted = 0;   // 0=未采纳 1=原样 2=修改
     body.innerHTML =
       '<div class="cp-section"><h4>📝 推荐话术（点采纳进输入框）</h4><div class="cp-suggest">' + escapeHtml(data.suggested_reply) + '</div></div>' +
       (data.context_summary ? '<div class="cp-section"><h4>🗂️ 上下文摘要</h4><div class="cp-summary">' + escapeHtml(data.context_summary) + '</div></div>' : '') +
@@ -321,8 +325,26 @@ async function regenerateCopilot() {
 function adoptSuggestion() {
   if (window._copilotReply) {
     document.getElementById('replyInput').value = window._copilotReply;
-    showMsg('建议已填入输入框，可继续编辑');
+    window._copilotAdopted = 1;  // 原样采纳（先记，最终以发送时是否修改判定）
+    showMsg('建议已填入输入框，可继续编辑（发送后自动记录采纳）');
   } else { showMsg('暂无建议，请先重新生成', true); }
+}
+
+// 采纳打点上报（发送回复时调用）
+async function reportAdoption(content) {
+  if (!window._copilotLogId) return;
+  var adopted = window._copilotAdopted;
+  if (adopted === 0) return;  // 未采纳过建议，不打点
+  // 判断是否被修改：发送内容与建议原文不同 → 修改后采纳
+  var finalAdopt = adopted;
+  if (content !== window._copilotReply) finalAdopt = 2;
+  try {
+    await api('/admin/knowledge/copilot/' + window._copilotLogId + '/adopt', {
+      method: 'POST',
+      body: JSON.stringify({ adopted: finalAdopt, edited_delta: window._copilotReply })
+    });
+    console.log('Copilot 采纳已记录:', finalAdopt);
+  } catch(e) { console.warn('采纳打点失败:', e.message); }
 }
 
 function fillToolQuery(tool) {

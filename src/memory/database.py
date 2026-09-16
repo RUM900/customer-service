@@ -148,6 +148,7 @@ async def init_db():
         from src.memory.review import ReviewRow
         from src.memory.customer_store import CustomerRow, OrderRow
         from src.memory.knowledge_gap_store import KnowledgeGapRow
+        from src.memory.copilot_log_store import CopilotLogRow
 
         engine = get_engine()
         async with engine.begin() as conn:

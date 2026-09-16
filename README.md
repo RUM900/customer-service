@@ -290,11 +290,20 @@ curl -X POST http://localhost:8000/admin/knowledge/conflict-check \
   -H "Authorization: Bearer <token>" \
   -d "policy_text=自本通知发布之日起，支持14天无理由退货。"
 
-# 8. 坐席 Copilot（人工聊天时实时推荐话术）
+# 8. 坐席 Copilot（人工聊天时实时推荐话术，自动写入审计）
 curl -X POST http://localhost:8000/admin/knowledge/copilot/assist \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"session_id": "sess_abc123", "customer_message": "我的订单还没到，很着急！", "agent_draft": ""}'
+
+# 9. Copilot 度量看板（采纳率 / 按意图采纳率 / 编辑量 / 成本）
+curl http://localhost:8000/admin/knowledge/copilot/stats?days=30 \
+  -H "Authorization: Bearer <token>"
+
+# 10. Copilot 采纳打点（坐席点击采纳后上报，adopted: 1=原样 2=修改）
+curl -X POST http://localhost:8000/admin/knowledge/copilot/{log_id}/adopt \
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"adopted": 1, "edited_delta": ""}'
 ```
 
 ### 坐席工作台 API（role=agent 或 admin，登录 `/admin/staff/login`）

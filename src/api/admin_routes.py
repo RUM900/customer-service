@@ -558,12 +558,13 @@ class CopilotResponse(BaseModel):
     suggested_reply: str = Field(description="推荐回复话术")
     context_summary: str = Field(default="", description="上下文摘要（给坐席看）")
     suggested_tools: list[str] = Field(default_factory=list, description="建议查询的操作卡片")
+    log_id: str = Field(default="", description="本次调用审计 ID（用于采纳打点）")
 
 
 @router.post(
     "/copilot/assist",
     response_model=CopilotResponse,
-    summary="坐席 Copilot：实时推荐话术",
+    summary="坐席 Copilot：实时推荐话术（自动写入审计）",
 )
 async def copilot_assist(
     req: CopilotRequest,
@@ -574,8 +575,11 @@ async def copilot_assist(
 
     输入：客户消息 + 坐席草稿（可选）
     输出：推荐回复 + 上下文摘要 + 建议查询的工具
+    附带：写入 copilot_logs 审计表（支持采纳率/成本统计）
     """
-    # 拉取会话历史作为上下文
+    import time as _time
+
+    started = _time.time()
     history_text = ""
     try:
         store = get_storage()
@@ -606,19 +610,102 @@ async def copilot_assist(
             system_prompt="你是客服坐席的 AI 副驾驶。只输出合法 JSON，不要多余文字。",
             user_prompt=user_prompt,
         )
+        latency_ms = int((_time.time() - started) * 1000)
 
         import json, re
         m = re.search(r'\{.*\}', raw, re.S)
+        parsed = {}
         if m:
             parsed = json.loads(m.group(0))
-            return CopilotResponse(
-                suggested_reply=parsed.get("suggested_reply", ""),
-                context_summary=parsed.get("context_summary", ""),
-                suggested_tools=parsed.get("suggested_tools", []),
-            )
-        return CopilotResponse(
-            suggested_reply=req.customer_message, context_summary="无法解析 Copilot 回复",
+
+        response = CopilotResponse(
+            suggested_reply=parsed.get("suggested_reply") or req.customer_message,
+            context_summary=parsed.get("context_summary", ""),
+            suggested_tools=parsed.get("suggested_tools", []),
         )
+
+        # 写入审计表（异步日志写入，失败不影响响应）
+        log_id = ""
+        try:
+            from src.memory.database import get_session_factory
+            from src.memory.copilot_log_store import CopilotLogStore
+
+            async with get_session_factory()() as db:
+                row = await CopilotLogStore(db).create({
+                    "session_id": req.session_id,
+                    "agent_id": _auth.split(":")[-1] if _auth else "",
+                    "customer_message": req.customer_message[:500],
+                    "suggested_reply": response.suggested_reply,
+                    "context_summary": response.context_summary,
+                    "suggested_tools": response.suggested_tools,
+                    "latency_ms": latency_ms,
+                })
+                await db.commit()
+                log_id = row.get("log_id", "")
+            response.log_id = log_id
+        except Exception as log_err:
+            logger.warning(f"Copilot: 审计写入失败: {log_err}")
+
+        return response
     except Exception as e:
         logger.error(f"Copilot: 调用失败: {e}")
         raise HTTPException(status_code=500, detail=f"Copilot 暂时不可用: {e}")
+
+
+# ============================================================
+# Copilot 审计与度量（A 阶段打磨）
+# ============================================================
+
+class CopilotAdoptRequest(BaseModel):
+    """采纳打点请求"""
+    adopted: int = Field(..., ge=1, le=2, description="1=原样采纳 2=修改后采纳")
+    edited_delta: str = Field(default="", description="坐席修改内容（采纳时的最终文本）")
+
+
+@router.post(
+    "/copilot/{log_id}/adopt",
+    summary="Copilot 采纳打点",
+)
+async def copilot_adopt(
+    log_id: str,
+    req: CopilotAdoptRequest,
+    _auth: str = Depends(require_admin),
+):
+    """坐席采纳建议后上报（用于采纳率统计）"""
+    try:
+        from src.memory.database import get_session_factory
+        from src.memory.copilot_log_store import CopilotLogStore
+
+        async with get_session_factory()() as db:
+            row = await CopilotLogStore(db).mark_adopted(
+                log_id, req.adopted, edited_delta=req.edited_delta,
+            )
+            await db.commit()
+            if row is None:
+                raise HTTPException(status_code=404, detail=f"未找到 Copilot 日志: {log_id}")
+        return {"status": "ok", "log_id": log_id, "adopted": req.adopted}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Copilot: 采纳打点失败: {e}")
+        raise HTTPException(status_code=500, detail=f"采纳打点失败: {e}")
+
+
+@router.get(
+    "/copilot/stats",
+    summary="Copilot 度量看板",
+)
+async def copilot_stats(
+    days: int = 30,
+    _auth: str = Depends(require_admin),
+):
+    """Copilot 统计：采纳率 / 按意图采纳率 / 编辑量 / 成本"""
+    try:
+        from src.memory.database import get_session_factory
+        from src.memory.copilot_log_store import CopilotLogStore
+
+        async with get_session_factory()() as db:
+            return await CopilotLogStore(db).stats(days=days)
+    except Exception as e:
+        logger.error(f"Copilot: 统计失败: {e}")
+        raise HTTPException(status_code=500, detail=f"统计失败: {e}")
