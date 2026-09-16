@@ -179,7 +179,7 @@ cp .env.example .env
 # ANTHROPIC_API_KEY=sk-ant-xxx  # Claude
 ```
 
-> 开发环境默认使用 SQLite（零配置），无需安装 PostgreSQL；`DASHSCOPE_API_KEY` 同时用于 FAQ 向量嵌入（text-embedding-v1）。
+> 开发环境默认使用 SQLite（零配置），无需安装 PostgreSQL；`DASHSCOPE_API_KEY` 用于 FAQ 向量嵌入（模型可在 `EMBEDDING_MODEL` 配置，可替换）。
 > 生产环境需设置 `ENVIRONMENT=production` 并强制 `CHECKPOINTER_BACKEND=postgres`（HITL 跨进程恢复依赖）。
 > 默认账号：管理员 `admin/admin123`、坐席 `agent/agent123`（可用 `AGENT_USERNAME/AGENT_PASSWORD` 修改）。
 
@@ -259,7 +259,7 @@ curl http://localhost:8000/admin/model-config
 curl -X PUT http://localhost:8000/admin/model-config \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"agent": "supervisor", "model": "qwen-plus"}'
+  -d '{"agent": "supervisor", "model": "<模型名>"}'
 
 # 3. FAQ 增删改查
 curl http://localhost:8000/admin/faqs
@@ -442,7 +442,7 @@ python tests/evals/generate_more_scenarios.py
 | LLM | DashScope / OpenAI / Claude（统一抽象 + 结构化输出） |
 | API | FastAPI + SSE 流式 + Web UI |
 | 存储 | SQLite(开发默认) / PostgreSQL(生产)，DB 故障自动降级内存 |
-| 向量检索 | ChromaDB + text-embedding-v1（1536 维） |
+| 向量检索 | ChromaDB + 可插拔向量模型（`EMBEDDING_MODEL` 配置，维度随模型变化，换模型需重建索引） |
 | 认证 | JWT + bcrypt + API Key 双轨鉴权 |
 | 迁移 | Alembic |
 | 测试 | pytest + pytest-asyncio |
