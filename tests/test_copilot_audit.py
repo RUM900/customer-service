@@ -62,6 +62,110 @@ class TestCopilotLogStore:
 
 
 # ============================================================
+# Copilot C 阶段：risk_flags 风险提示（画像注入 + 解析容错）
+# ============================================================
+
+class TestCopilotRiskFlags:
+    @pytest.mark.asyncio
+    async def test_risk_flags_parsed(self):
+        """LLM 返回 risk_flags 时应正确解析"""
+        from src.api.admin_routes import CopilotRequest, copilot_assist, CopilotResponse
+
+        fake_raw = (
+            '{"suggested_reply": "已为您登记退款，稍后核实", "context_summary": "退款诉求",'
+            ' "suggested_tools": ["order_lookup"],'
+            ' "risk_flags": [{"type": "over_refund", "level": "high", "message": "客户近30天退款3次"},'
+            '   {"type": "verification", "level": "medium", "message": "缺少订单号"}]}'
+        )
+
+        mock_storage = Mock()
+        mock_storage.get_history = AsyncMock(return_value=[])
+        mock_storage.get_session = AsyncMock(return_value=type("S", (), {"customer_id": "cust_001"})())
+
+        with patch("src.api.admin_routes.get_storage", return_value=mock_storage):
+            with patch(
+                "src.agents.supervisor.SupervisorAgent.call_chat",
+                new=AsyncMock(return_value=fake_raw),
+            ):
+                # 审计写入用假工厂（不影响本测试主断言）
+                class FakeDb:
+                    async def commit(self): return None
+                class FakeFactory:
+                    def __call__(self): return self
+                    async def __aenter__(self): return FakeDb()
+                    async def __aexit__(self, *a): return False
+                with patch("src.memory.database.get_session_factory", FakeFactory()), \
+                     patch("src.memory.copilot_log_store.CopilotLogStore.create",
+                           new=AsyncMock(return_value={"log_id": "cop_x"})):
+                    req = CopilotRequest(session_id="sess_c1", customer_message="要求退款")
+                    resp = await copilot_assist(req, _auth="staff_authenticated:admin")
+
+        assert isinstance(resp, CopilotResponse)
+        assert len(resp.risk_flags) == 2
+        assert resp.risk_flags[0].type == "over_refund"
+        assert resp.risk_flags[0].level == "high"
+        assert resp.risk_flags[1].type == "verification"
+
+    @pytest.mark.asyncio
+    async def test_risk_flags_empty_tolerant(self):
+        """LLM 未返回 risk_flags 时应容错为空列表"""
+        from src.api.admin_routes import CopilotRequest, copilot_assist
+
+        fake_raw = '{"suggested_reply": "好的", "context_summary": "简单咨询", "suggested_tools": []}'
+        mock_storage = Mock()
+        mock_storage.get_history = AsyncMock(return_value=[])
+        mock_storage.get_session = AsyncMock(return_value=None)
+
+        with patch("src.api.admin_routes.get_storage", return_value=mock_storage):
+            with patch(
+                "src.agents.supervisor.SupervisorAgent.call_chat",
+                new=AsyncMock(return_value=fake_raw),
+            ), patch("src.memory.database.get_session_factory"), \
+                 patch("src.memory.copilot_log_store.CopilotLogStore.create",
+                       new=AsyncMock(return_value={"log_id": "cop_y"})):
+                req = CopilotRequest(session_id="sess_c2", customer_message="问运费")
+                resp = await copilot_assist(req, _auth="staff_authenticated:admin")
+
+        assert resp.risk_flags == []
+
+    @pytest.mark.asyncio
+    async def test_profile_injected_into_prompt(self):
+        """客户画像应注入 prompt（prompt 文本包含等级/消费）"""
+        from src.api.admin_routes import CopilotRequest, copilot_assist
+
+        fake_raw = '{"suggested_reply": "感谢您的信任", "context_summary": "VIP 客户", "suggested_tools": []}'
+        mock_storage = Mock()
+        mock_storage.get_history = AsyncMock(return_value=[])
+        mock_storage.get_session = AsyncMock(return_value=type("S", (), {"customer_id": "cust_001"})())
+
+        # 画像加载：patch CRM 返回 VIP 客户
+        from src.models.customer import CustomerTier
+        crm_result = {"found": True, "customer": {
+            "tier": CustomerTier.VIP.value, "total_spent": 12800.0,
+            "total_orders": 25, "tags": ["高价值"],
+        }}
+
+        captured_prompt = {}
+
+        async def fake_call_chat(self, system_prompt, user_prompt, **kw):
+            captured_prompt["p"] = user_prompt
+            return fake_raw
+
+        with patch("src.api.admin_routes.get_storage", return_value=mock_storage), \
+             patch("src.tools.crm.CRMLookupTool.execute", new=AsyncMock(return_value=crm_result)), \
+             patch("src.agents.supervisor.SupervisorAgent.call_chat", new=fake_call_chat), \
+             patch("src.memory.database.get_session_factory"), \
+             patch("src.memory.copilot_log_store.CopilotLogStore.create",
+                   new=AsyncMock(return_value={"log_id": "cop_z"})):
+            req = CopilotRequest(session_id="sess_c3", customer_message="感谢")
+            await copilot_assist(req, _auth="staff_authenticated:admin")
+
+        assert "客户画像" in captured_prompt["p"]
+        assert "vip" in captured_prompt["p"]
+        assert "12800" in captured_prompt["p"]
+
+
+# ============================================================
 # copilot_assist 自动写审计
 # ============================================================
 

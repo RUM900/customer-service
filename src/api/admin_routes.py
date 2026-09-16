@@ -553,11 +553,19 @@ class CopilotRequest(BaseModel):
     agent_draft: str = Field(default="", description="坐席已输入的草稿（可选）")
 
 
+class CopilotRiskFlag(BaseModel):
+    """Copilot 风险提示项"""
+    type: str = Field(description="风险类型: over_refund/frequent_refund/legal/high_value/verification")
+    level: str = Field(default="medium", description="严重度: low/medium/high")
+    message: str = Field(description="给坐席看的中文风险说明")
+
+
 class CopilotResponse(BaseModel):
     """Copilot 辅助响应"""
     suggested_reply: str = Field(description="推荐回复话术")
     context_summary: str = Field(default="", description="上下文摘要（给坐席看）")
     suggested_tools: list[str] = Field(default_factory=list, description="建议查询的操作卡片")
+    risk_flags: list[CopilotRiskFlag] = Field(default_factory=list, description="风险提示（合规护栏）")
     log_id: str = Field(default="", description="本次调用审计 ID（用于采纳打点）")
 
 
@@ -592,6 +600,29 @@ async def copilot_assist(
     except Exception as e:
         logger.warning(f"Copilot: 历史拉取失败: {e}")
 
+    # C 阶段：加载客户画像（用于风险提示与个性化话术）
+    customer_profile_text = ""
+    customer_id = ""
+    try:
+        session = await get_storage().get_session(req.session_id)
+        customer_id = session.customer_id if session else ""
+    except Exception:
+        pass
+    if customer_id:
+        try:
+            from src.tools.crm import CRMLookupTool
+            result = await CRMLookupTool().execute(customer_id=customer_id)
+            if result.get("found"):
+                c = result["customer"]
+                profile_parts = []
+                if c.get("tier"): profile_parts.append(f"等级: {c['tier']}")
+                if c.get("total_spent"): profile_parts.append(f"累计消费: ¥{c['total_spent']}")
+                if c.get("total_orders"): profile_parts.append(f"订单数: {c['total_orders']}")
+                if c.get("tags"): profile_parts.append(f"标签: {','.join(c['tags'])}")
+                customer_profile_text = " | ".join(profile_parts)
+        except Exception as e:
+            logger.warning(f"Copilot: 画像加载失败: {e}")
+
     try:
         from src.agents.supervisor import SupervisorAgent
 
@@ -600,11 +631,22 @@ async def copilot_assist(
             f"## 客户最新消息\n{req.customer_message}\n\n"
             f"## 会话历史\n{history_text or '（无）'}\n\n"
             f"## 坐席草稿\n{req.agent_draft or '（未填写）'}\n\n"
+        )
+        if customer_profile_text:
+            user_prompt += f"## 客户画像（仅坐席可见，勿在话术中泄露）\n{customer_profile_text}\n\n"
+        user_prompt += (
             "请以资深客服主管视角，给出：\n"
-            "1. suggested_reply: 一段可以直接发送给客户的、专业且有人情味的回复话术；\n"
+            "1. suggested_reply: 一段可以直接发送给客户的、专业且有人情味的回复话术（高价值/怒气客户可体现关怀）；\n"
             "2. context_summary: 一段给坐席看的上下文摘要（客户诉求、情绪、需要核实的点）；\n"
-            "3. suggested_tools: 建议坐席查询的工具列表，如 crm_lookup / order_lookup / knowledge_search / ticket_query。\n"
-            "只输出 JSON：{'suggested_reply': '...', 'context_summary': '...', 'suggested_tools': [...]}"
+            "3. suggested_tools: 建议坐席查询的工具列表，如 crm_lookup / order_lookup / knowledge_search / ticket_query；\n"
+            "4. risk_flags: 风险提示列表，仅当存在下列情形时给出：\n"
+            "   - 客户频繁退款/高退款倾向 → type=over_refund\n"
+            "   - 高额退款/补偿金额大 → type=high_value\n"
+            "   - 涉及法律/人身攻击/威胁 → type=legal\n"
+            "   - 需先核实信息（订单号/凭证缺失）→ type=verification\n"
+            "   - 客户画像与诉求矛盾（如新客索要大额补偿）→ type=inconsistent\n"
+            "   risk_flags 每项格式: {'type': '...', 'level': 'low/medium/high', 'message': '给坐席的中文提示'}。无风险时给 []。\n"
+            "只输出 JSON：{'suggested_reply': '...', 'context_summary': '...', 'suggested_tools': [...], 'risk_flags': [...]}"
         )
         raw = await agent.call_chat(
             system_prompt="你是客服坐席的 AI 副驾驶。只输出合法 JSON，不要多余文字。",
@@ -618,10 +660,21 @@ async def copilot_assist(
         if m:
             parsed = json.loads(m.group(0))
 
+        # 解析 risk_flags（容错：可能缺字段/格式不规范）
+        risk_flags = []
+        for rf in parsed.get("risk_flags") or []:
+            if isinstance(rf, dict) and rf.get("type") and rf.get("message"):
+                risk_flags.append(CopilotRiskFlag(
+                    type=str(rf["type"]),
+                    level=str(rf.get("level", "medium")),
+                    message=str(rf["message"]),
+                ))
+
         response = CopilotResponse(
             suggested_reply=parsed.get("suggested_reply") or req.customer_message,
             context_summary=parsed.get("context_summary", ""),
             suggested_tools=parsed.get("suggested_tools", []),
+            risk_flags=risk_flags,
         )
 
         # 写入审计表（异步日志写入，失败不影响响应）
