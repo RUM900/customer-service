@@ -145,18 +145,20 @@ class TestConversationQueue:
 class TestAgentCopilot:
     @pytest.mark.asyncio
     async def test_agent_copilot_delegates(self):
-        """坐席 Copilot 应复用管理员 Copilot 能力"""
+        """坐席 Copilot 应复用管理员 Copilot 能力（全字段透传）"""
         from src.api.agent_routes import CopilotRequest, agent_copilot
+        from src.api.admin_routes import CopilotResponse
+
+        core = CopilotResponse(
+            suggested_reply="别着急，我马上为您核实订单进度",
+            context_summary="客户订单延迟",
+            suggested_tools=["order_lookup"],
+            log_id="cop_legacy",
+        )
 
         with patch(
             "src.api.admin_routes.copilot_assist",
-            new=AsyncMock(return_value=type("R", (), {
-                "suggested_reply": "别着急，我马上为您核实订单进度",
-                "context_summary": "客户订单延迟",
-                "suggested_tools": ["order_lookup"],
-                "risk_flags": [],
-                "log_id": "cop_legacy",
-            })()),
+            new=AsyncMock(return_value=core),
         ):
             req = CopilotRequest(session_id="sess_c1", customer_message="订单没到")
             resp = await agent_copilot("sess_c1", req, _auth="staff_authenticated:agent")
@@ -167,17 +169,18 @@ class TestAgentCopilot:
 
     @pytest.mark.asyncio
     async def test_agent_copilot_passthrough_risk_and_log(self):
-        """坐席 Copilot 应透传 risk_flags 与 log_id（回归: 曾漏字段）"""
+        """坐席 Copilot 应透传 risk_flags / knowledge_refs / log_id（回归: 曾多次漏字段）"""
         from src.api.agent_routes import CopilotRequest, agent_copilot
+        from src.api.admin_routes import CopilotResponse, CopilotRiskFlag, CopilotKnowledgeRef
 
-        from src.api.admin_routes import CopilotRiskFlag
-        core = type("Core", (), {
-            "suggested_reply": "已登记",
-            "context_summary": "退款诉求",
-            "suggested_tools": ["order_lookup"],
-            "risk_flags": [CopilotRiskFlag(type="high_value", level="high", message="大额退款需审批")],
-            "log_id": "cop_passthrough123",
-        })()
+        core = CopilotResponse(
+            suggested_reply="已登记",
+            context_summary="退款诉求",
+            suggested_tools=["order_lookup"],
+            risk_flags=[CopilotRiskFlag(type="high_value", level="high", message="大额退款需审批")],
+            knowledge_refs=[CopilotKnowledgeRef(faq_id="faq_x", question="退货政策", score=0.8)],
+            log_id="cop_passthrough123",
+        )
 
         with patch(
             "src.api.admin_routes.copilot_assist",
@@ -187,4 +190,5 @@ class TestAgentCopilot:
             resp = await agent_copilot("sess_p1", req, _auth="staff_authenticated:agent")
 
         assert resp.risk_flags and resp.risk_flags[0].type == "high_value"
+        assert resp.knowledge_refs and resp.knowledge_refs[0].faq_id == "faq_x"
         assert resp.log_id == "cop_passthrough123"

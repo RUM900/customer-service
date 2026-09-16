@@ -166,6 +166,92 @@ class TestCopilotRiskFlags:
 
 
 # ============================================================
+# Copilot C 阶段③：知识库引用（防幻觉）
+# ============================================================
+
+class TestCopilotKnowledgeRefs:
+    @pytest.mark.asyncio
+    async def test_knowledge_refs_injected_and_returned(self):
+        """知识库命中应注入 prompt 并作为 knowledge_refs 返回"""
+        from src.api.admin_routes import CopilotRequest, copilot_assist
+
+        fake_raw = '{"suggested_reply": "按政策支持7天无理由退货", "context_summary": "退货咨询", "suggested_tools": []}'
+
+        # 知识检索 mock：命中一条退货 FAQ
+        kb_mock = Mock()
+        kb_mock.execute = AsyncMock(return_value={
+            "results": [
+                {"faq_id": "faq_ret", "question": "支持七天无理由退货吗？",
+                 "answer": "支持，收货后7天内可申请无理由退货", "category": "general",
+                 "score": 0.81},
+            ],
+            "top_score": 0.81,
+        })
+        registry_mock = Mock()
+        registry_mock.get_tool = Mock(return_value=kb_mock)
+
+        mock_storage = Mock()
+        mock_storage.get_history = AsyncMock(return_value=[])
+        mock_storage.get_session = AsyncMock(return_value=None)
+
+        captured = {}
+        async def fake_call_chat(self, system_prompt, user_prompt, **kw):
+            captured["p"] = user_prompt
+            return fake_raw
+
+        class FakeDb:
+            async def commit(self): return None
+        class FakeFactory:
+            def __call__(self): return self
+            async def __aenter__(self): return FakeDb()
+            async def __aexit__(self, *a): return False
+
+        with patch("src.api.admin_routes.get_storage", return_value=mock_storage), \
+             patch("src.api.deps.get_tool_registry", return_value=registry_mock), \
+             patch("src.agents.supervisor.SupervisorAgent.call_chat", new=fake_call_chat), \
+             patch("src.memory.database.get_session_factory", FakeFactory()), \
+             patch("src.memory.copilot_log_store.CopilotLogStore.create",
+                   new=AsyncMock(return_value={"log_id": "cop_kr"})):
+            req = CopilotRequest(session_id="sess_k1", customer_message="支持退货吗")
+            resp = await copilot_assist(req, _auth="staff_authenticated:admin")
+
+        # prompt 注入政策依据
+        assert "政策依据" in captured["p"]
+        assert "七天无理由" in captured["p"]
+        # 响应带 knowledge_refs
+        assert len(resp.knowledge_refs) == 1
+        assert resp.knowledge_refs[0].faq_id == "faq_ret"
+        assert resp.knowledge_refs[0].score == pytest.approx(0.81)
+
+    @pytest.mark.asyncio
+    async def test_knowledge_refs_empty_when_no_hit(self):
+        """知识库未命中时应返回空引用（不阻塞）"""
+        from src.api.admin_routes import CopilotRequest, copilot_assist
+
+        fake_raw = '{"suggested_reply": "好的", "context_summary": "无", "suggested_tools": []}'
+        kb_mock = Mock()
+        kb_mock.execute = AsyncMock(return_value={"results": [], "top_score": 0.0})
+        registry_mock = Mock()
+        registry_mock.get_tool = Mock(return_value=kb_mock)
+
+        mock_storage = Mock()
+        mock_storage.get_history = AsyncMock(return_value=[])
+        mock_storage.get_session = AsyncMock(return_value=None)
+
+        with patch("src.api.admin_routes.get_storage", return_value=mock_storage), \
+             patch("src.api.deps.get_tool_registry", return_value=registry_mock), \
+             patch("src.agents.supervisor.SupervisorAgent.call_chat",
+                   new=AsyncMock(return_value=fake_raw)), \
+             patch("src.memory.database.get_session_factory"), \
+             patch("src.memory.copilot_log_store.CopilotLogStore.create",
+                   new=AsyncMock(return_value={"log_id": "cop_kr2"})):
+            req = CopilotRequest(session_id="sess_k2", customer_message="随便聊聊")
+            resp = await copilot_assist(req, _auth="staff_authenticated:admin")
+
+        assert resp.knowledge_refs == []
+
+
+# ============================================================
 # copilot_assist 自动写审计
 # ============================================================
 

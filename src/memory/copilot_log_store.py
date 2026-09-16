@@ -29,6 +29,7 @@ class CopilotLogRow(Base):
     suggested_reply: Mapped[str] = mapped_column(Text, default="")
     context_summary: Mapped[str] = mapped_column(Text, default="")
     suggested_tools_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    knowledge_refs_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     adopted: Mapped[int] = mapped_column(Integer, default=0)     # 0 未采纳 / 1 原样采纳 / 2 修改后采纳
     edited_delta: Mapped[str] = mapped_column(Text, default="")  # 坐席修改内容（采纳时的原文快照）
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
@@ -55,6 +56,8 @@ class CopilotLogStore:
             suggested_reply=log.get("suggested_reply", ""),
             context_summary=log.get("context_summary", ""),
             suggested_tools_json=_dumps(log.get("suggested_tools", [])),
+            knowledge_refs_json=_dumps(log.get("knowledge_refs", []))
+            if log.get("knowledge_refs") else None,
             adopted=log.get("adopted", 0),
             edited_delta=log.get("edited_delta", ""),
             latency_ms=log.get("latency_ms", 0),
@@ -136,6 +139,12 @@ class CopilotLogStore:
                 tools = json.loads(row.suggested_tools_json)
             except json.JSONDecodeError:
                 pass
+        refs = []
+        if row.knowledge_refs_json:
+            try:
+                refs = json.loads(row.knowledge_refs_json)
+            except json.JSONDecodeError:
+                pass
         return {
             "log_id": row.log_id,
             "session_id": row.session_id,
@@ -144,6 +153,7 @@ class CopilotLogStore:
             "suggested_reply": row.suggested_reply,
             "context_summary": row.context_summary,
             "suggested_tools": tools,
+            "knowledge_refs": refs,
             "adopted": row.adopted,
             "edited_delta": row.edited_delta,
             "latency_ms": row.latency_ms,

@@ -560,12 +560,21 @@ class CopilotRiskFlag(BaseModel):
     message: str = Field(description="给坐席看的中文风险说明")
 
 
+class CopilotKnowledgeRef(BaseModel):
+    """Copilot 知识库引用项"""
+    faq_id: str = Field(description="FAQ ID")
+    question: str = Field(description="FAQ 问题")
+    category: str = Field(default="", description="分类")
+    score: float = Field(default=0.0, description="匹配分数")
+
+
 class CopilotResponse(BaseModel):
     """Copilot 辅助响应"""
     suggested_reply: str = Field(description="推荐回复话术")
     context_summary: str = Field(default="", description="上下文摘要（给坐席看）")
     suggested_tools: list[str] = Field(default_factory=list, description="建议查询的操作卡片")
     risk_flags: list[CopilotRiskFlag] = Field(default_factory=list, description="风险提示（合规护栏）")
+    knowledge_refs: list[CopilotKnowledgeRef] = Field(default_factory=list, description="知识库引用（话术依据，防幻觉）")
     log_id: str = Field(default="", description="本次调用审计 ID（用于采纳打点）")
 
 
@@ -623,6 +632,27 @@ async def copilot_assist(
         except Exception as e:
             logger.warning(f"Copilot: 画像加载失败: {e}")
 
+    # C 阶段③：检索知识库（确定性引用，防 LLM 幻觉编造政策）
+    knowledge_refs: list[CopilotKnowledgeRef] = []
+    knowledge_text = ""
+    try:
+        from src.api.deps import get_tool_registry
+        kb = get_tool_registry().get_tool("knowledge_search")
+        if kb is not None:
+            search = await kb.execute(query=req.customer_message, top_k=3)
+            for r in search.get("results", [])[:3]:
+                if not r.get("answer"):
+                    continue
+                knowledge_refs.append(CopilotKnowledgeRef(
+                    faq_id=r.get("faq_id", ""),
+                    question=r.get("question", ""),
+                    category=r.get("category", ""),
+                    score=float(r.get("score", 0.0)),
+                ))
+                knowledge_text += f"- [{r.get('question', '')}] → {str(r.get('answer', ''))[:150]}\n"
+    except Exception as e:
+        logger.warning(f"Copilot: 知识库检索失败: {e}")
+
     try:
         from src.agents.supervisor import SupervisorAgent
 
@@ -634,9 +664,13 @@ async def copilot_assist(
         )
         if customer_profile_text:
             user_prompt += f"## 客户画像（仅坐席可见，勿在话术中泄露）\n{customer_profile_text}\n\n"
+        if knowledge_text:
+            user_prompt += (
+                f"## 政策依据（来自官方知识库，话术中引用的政策必须以此为准，不得自行编造）\n{knowledge_text}\n\n"
+            )
         user_prompt += (
             "请以资深客服主管视角，给出：\n"
-            "1. suggested_reply: 一段可以直接发送给客户的、专业且有人情味的回复话术（高价值/怒气客户可体现关怀）；\n"
+            "1. suggested_reply: 一段可以直接发送给客户的、专业且有人情味的回复话术（高价值/怒气客户可体现关怀；如涉及政策，请严格引用「政策依据」中的原文，不得自行编造条款）；\n"
             "2. context_summary: 一段给坐席看的上下文摘要（客户诉求、情绪、需要核实的点）；\n"
             "3. suggested_tools: 建议坐席查询的工具列表，如 crm_lookup / order_lookup / knowledge_search / ticket_query；\n"
             "4. risk_flags: 风险提示列表，仅当存在下列情形时给出：\n"
@@ -675,6 +709,7 @@ async def copilot_assist(
             context_summary=parsed.get("context_summary", ""),
             suggested_tools=parsed.get("suggested_tools", []),
             risk_flags=risk_flags,
+            knowledge_refs=knowledge_refs,
         )
 
         # 写入审计表（异步日志写入，失败不影响响应）
@@ -691,6 +726,10 @@ async def copilot_assist(
                     "suggested_reply": response.suggested_reply,
                     "context_summary": response.context_summary,
                     "suggested_tools": response.suggested_tools,
+                    "knowledge_refs": [
+                        {"faq_id": r.faq_id, "question": r.question, "score": r.score}
+                        for r in knowledge_refs
+                    ],
                     "latency_ms": latency_ms,
                 })
                 await db.commit()

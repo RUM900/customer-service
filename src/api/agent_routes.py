@@ -283,10 +283,5 @@ async def agent_copilot(
         ),
         _auth="staff_authenticated",
     )
-    return CopilotResponse(
-        suggested_reply=core.suggested_reply,
-        context_summary=core.context_summary,
-        suggested_tools=core.suggested_tools,
-        risk_flags=core.risk_flags,
-        log_id=core.log_id,
-    )
+    # 自动透传所有字段（避免手动逐个透传导致漏字段——已发生过 3 次）
+    return CopilotResponse(**core.model_dump())
