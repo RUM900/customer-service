@@ -252,6 +252,67 @@ class TestCopilotKnowledgeRefs:
 
 
 # ============================================================
+# Copilot B 阶段：多候选建议（suggestions）
+# ============================================================
+
+class TestCopilotMultiCandidate:
+    @pytest.mark.asyncio
+    async def test_suggestions_parsed(self):
+        """LLM 返回 3 条 suggestions 时应正确解析，suggested_reply=suggestions[0]"""
+        from src.api.admin_routes import CopilotRequest, copilot_assist
+
+        fake_raw = (
+            '{"suggestions": ["专业版回复", "简洁版回复", "温情版回复"],'
+            ' "context_summary": "x", "suggested_tools": [], "risk_flags": []}'
+        )
+        mock_storage = Mock()
+        mock_storage.get_history = AsyncMock(return_value=[])
+        mock_storage.get_session = AsyncMock(return_value=None)
+
+        with patch("src.api.admin_routes.get_storage", return_value=mock_storage), \
+             patch("src.agents.supervisor.SupervisorAgent.call_chat",
+                   new=AsyncMock(return_value=fake_raw)), \
+             patch("src.memory.database.get_session_factory"), \
+             patch("src.memory.copilot_log_store.CopilotLogStore.create",
+                   new=AsyncMock(return_value={"log_id": "cop_multi"})):
+            req = CopilotRequest(session_id="sess_b1", customer_message="退款")
+            resp = await copilot_assist(req, _auth="staff_authenticated:admin")
+
+        assert len(resp.suggestions) == 3
+        assert resp.suggested_reply == "专业版回复"
+        assert resp.suggestions[2] == "温情版回复"
+
+    @pytest.mark.asyncio
+    async def test_suggestions_legacy_compat(self):
+        """LLM 未返回 suggestions 时回退旧格式 suggested_reply"""
+        from src.api.admin_routes import CopilotRequest, copilot_assist
+
+        fake_raw = '{"suggested_reply": "旧格式回复", "context_summary": "x"}'
+        mock_storage = Mock()
+        mock_storage.get_history = AsyncMock(return_value=[])
+        mock_storage.get_session = AsyncMock(return_value=None)
+
+        with patch("src.api.admin_routes.get_storage", return_value=mock_storage), \
+             patch("src.agents.supervisor.SupervisorAgent.call_chat",
+                   new=AsyncMock(return_value=fake_raw)), \
+             patch("src.memory.database.get_session_factory"), \
+             patch("src.memory.copilot_log_store.CopilotLogStore.create",
+                   new=AsyncMock(return_value={"log_id": "cop_legacy2"})):
+            req = CopilotRequest(session_id="sess_b2", customer_message="问运费")
+            resp = await copilot_assist(req, _auth="staff_authenticated:admin")
+
+        assert resp.suggestions == ["旧格式回复"]
+        assert resp.suggested_reply == "旧格式回复"
+
+    def test_suggestions_short_circuit_empty(self):
+        """空 suggestions 过滤空白项"""
+        from src.api.admin_routes import CopilotResponse
+        resp = CopilotResponse(suggested_reply="a", suggestions=[" a ", "  ", "b"])
+        # 空白项在组装逻辑中被过滤，但模型本身不做过滤；这里验证字段可用
+        assert len(resp.suggestions) == 3
+
+
+# ============================================================
 # copilot_assist 自动写审计
 # ============================================================
 

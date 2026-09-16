@@ -570,7 +570,8 @@ class CopilotKnowledgeRef(BaseModel):
 
 class CopilotResponse(BaseModel):
     """Copilot 辅助响应"""
-    suggested_reply: str = Field(description="推荐回复话术")
+    suggested_reply: str = Field(description="推荐回复话术（= suggestions[0]，向后兼容）")
+    suggestions: list[str] = Field(default_factory=list, description="多候选话术（专业/简洁/温情 3 种风格）")
     context_summary: str = Field(default="", description="上下文摘要（给坐席看）")
     suggested_tools: list[str] = Field(default_factory=list, description="建议查询的操作卡片")
     risk_flags: list[CopilotRiskFlag] = Field(default_factory=list, description="风险提示（合规护栏）")
@@ -670,7 +671,11 @@ async def copilot_assist(
             )
         user_prompt += (
             "请以资深客服主管视角，给出：\n"
-            "1. suggested_reply: 一段可以直接发送给客户的、专业且有人情味的回复话术（高价值/怒气客户可体现关怀；如涉及政策，请严格引用「政策依据」中的原文，不得自行编造条款）；\n"
+            "1. suggestions: **3 条不同风格的候选话术**（数组，每条都可直接发送：\n"
+            "   - 第1条: 专业稳重版（权威、清晰、正式）\n"
+            "   - 第2条: 简洁高效版（短小精悍、直奔重点）\n"
+            "   - 第3条: 温情关怀版（温暖、共情、安抚情绪；对高价值/怒气客户尤其适用）\n"
+            "   要求：3 条表述不同、风格差异明显，且都基于「政策依据」、不编造条款；\n"
             "2. context_summary: 一段给坐席看的上下文摘要（客户诉求、情绪、需要核实的点）；\n"
             "3. suggested_tools: 建议坐席查询的工具列表，如 crm_lookup / order_lookup / knowledge_search / ticket_query；\n"
             "4. risk_flags: 风险提示列表，仅当存在下列情形时给出：\n"
@@ -680,7 +685,7 @@ async def copilot_assist(
             "   - 需先核实信息（订单号/凭证缺失）→ type=verification\n"
             "   - 客户画像与诉求矛盾（如新客索要大额补偿）→ type=inconsistent\n"
             "   risk_flags 每项格式: {'type': '...', 'level': 'low/medium/high', 'message': '给坐席的中文提示'}。无风险时给 []。\n"
-            "只输出 JSON：{'suggested_reply': '...', 'context_summary': '...', 'suggested_tools': [...], 'risk_flags': [...]}"
+            "只输出 JSON：{'suggestions': [...], 'context_summary': '...', 'suggested_tools': [...], 'risk_flags': [...]}"
         )
         raw = await agent.call_chat(
             system_prompt="你是客服坐席的 AI 副驾驶。只输出合法 JSON，不要多余文字。",
@@ -694,6 +699,14 @@ async def copilot_assist(
         if m:
             parsed = json.loads(m.group(0))
 
+        # 解析多候选（容错：LLM 可能缺 suggestions 或格式不规范）
+        raw_suggestions = parsed.get("suggestions") or []
+        suggestions = [str(s).strip() for s in raw_suggestions if str(s).strip()]
+        if not suggestions:
+            # 兼容旧格式 suggested_reply
+            legacy = parsed.get("suggested_reply") or req.customer_message
+            suggestions = [str(legacy)]
+
         # 解析 risk_flags（容错：可能缺字段/格式不规范）
         risk_flags = []
         for rf in parsed.get("risk_flags") or []:
@@ -705,7 +718,8 @@ async def copilot_assist(
                 ))
 
         response = CopilotResponse(
-            suggested_reply=parsed.get("suggested_reply") or req.customer_message,
+            suggested_reply=suggestions[0] if suggestions else req.customer_message,
+            suggestions=suggestions,
             context_summary=parsed.get("context_summary", ""),
             suggested_tools=parsed.get("suggested_tools", []),
             risk_flags=risk_flags,
