@@ -8,4 +8,6 @@ data/chroma/
 *.db
 *.db-wal
 *.db-shm
-tests/evals/reports/
+tests/evals/reports/*
+!tests/evals/reports/eval_results_20260824_225016.json
+!tests/evals/reports/eval_results_20261014_200156.json
