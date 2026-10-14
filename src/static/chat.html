@@ -47,34 +47,54 @@ body { font: 14px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin .6s linear infinite; vertical-align: middle; margin-right: 4px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 </style>
+<link rel="stylesheet" href="/static/ui.css">
 </head>
-<body>
-<div class="sidebar">
-  <div class="sidebar-header"><h2>智能客服</h2></div>
+<body class="chat-page">
+<div class="sidebar-backdrop" onclick="closeMenu()"></div>
+<div class="sidebar" id="sessionSidebar">
+  <div class="sidebar-header"><h2>智能客服</h2><button class="sidebar-close" type="button" aria-label="关闭会话列表" onclick="closeMenu()">×</button></div>
   <div class="session-list" id="sessionList"><div style="color:#888;padding:12px;font-size:13px">点击下方按钮新建会话</div></div>
-  <div class="sidebar-footer"><button onclick="newSession()">+ 新建会话</button></div>
+  <div class="sidebar-footer"><button id="newSessionBtn" onclick="newSession()">+ 新建会话</button></div>
 </div>
 <div class="main">
-  <div class="chat-header"><h3 id="chatTitle">新建一个会话开始对话</h3></div>
-  <div id="errorMsg"></div>
-  <div class="messages" id="messages"><div style="color:#aaa;text-align:center;padding-top:80px">点击左侧 [+ 新建会话] 开始</div></div>
-  <div class="input-area">
-    <input type="text" id="msgInput" placeholder="输入消息..." onkeydown="if(event.key==='Enter')sendMsg()">
-    <button id="sendBtn" onclick="sendMsg()">发送</button>
-  </div>
+  <div class="chat-header"><button class="mobile-menu-btn" type="button" aria-label="打开会话列表" aria-controls="sessionSidebar" aria-expanded="false" onclick="openMenu()">☰</button><h3 id="chatTitle">新建一个会话开始对话</h3></div>
+  <div id="errorMsg" role="alert"></div>
+  <div class="messages" id="messages"><div class="empty-state"><strong>你好，需要什么帮助？</strong><p>新建会话后即可开始咨询。</p><button type="button" onclick="newSession()">开始新会话</button></div></div>
+  <form class="input-area" onsubmit="event.preventDefault();sendMsg()">
+    <label class="sr-only" for="msgInput">输入消息</label>
+    <input type="text" id="msgInput" placeholder="输入消息..." autocomplete="off">
+    <button id="sendBtn" type="submit">发送</button>
+  </form>
 </div>
 <script>
 var currentSession = null;
 var sessions = {};
+var creatingSession = false;
+var sendingMessage = false;
+var errorTimer = null;
+function openMenu() { document.body.classList.add('menu-open'); document.querySelector('.mobile-menu-btn').setAttribute('aria-expanded', 'true'); document.querySelector('.sidebar-close').focus(); }
+function closeMenu() { document.body.classList.remove('menu-open'); document.querySelector('.mobile-menu-btn').setAttribute('aria-expanded', 'false'); }
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && document.body.classList.contains('menu-open')) {
+    closeMenu();
+    document.querySelector('.mobile-menu-btn').focus();
+  }
+});
 
 function showError(msg) {
   var el = document.getElementById('errorMsg');
   el.textContent = msg;
   el.style.display = 'block';
-  setTimeout(function() { el.style.display = 'none'; }, 5000);
+  clearTimeout(errorTimer);
+  errorTimer = setTimeout(function() { el.style.display = 'none'; }, 5000);
 }
 
 async function newSession() {
+  if (creatingSession) return;
+  creatingSession = true;
+  var btn = document.getElementById('newSessionBtn');
+  btn.disabled = true;
+  btn.textContent = '创建中...';
   try {
     var res = await fetch('/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -84,22 +104,20 @@ async function newSession() {
     renderSessions();
     selectSession(sid);
   } catch (e) {
-    showError('创建会话失败: ' + e.message);
-    // 兜底：手动生成 session id
-    var sid = 'sess_' + Math.random().toString(36).slice(2, 10);
-    sessions[sid] = { id: sid, preview: '新会话', messages: [] };
-    renderSessions();
-    selectSession(sid);
+    showError('创建会话失败，请检查连接后重试。' + e.message);
+  } finally {
+    creatingSession = false;
+    btn.disabled = false;
+    btn.textContent = '+ 新建会话';
   }
 }
 
 function selectSession(sid) {
   currentSession = sid;
-  document.querySelectorAll('.session-item').forEach(function(el) { el.classList.remove('active'); });
-  var el = document.getElementById('sess-' + sid);
-  if (el) el.classList.add('active');
+  renderSessions();
   document.getElementById('chatTitle').textContent = '会话 #' + sid.slice(-8);
   renderMessages();
+  closeMenu();
 }
 
 function renderSessions() {
@@ -107,10 +125,10 @@ function renderSessions() {
   var html = '';
   for (var id in sessions) {
     var s = sessions[id];
-    html += '<div class="session-item' + (id === currentSession ? ' active' : '') + '" id="sess-' + id + '" onclick="selectSession(\'' + id + '\')">';
+    html += '<button type="button" class="session-item' + (id === currentSession ? ' active' : '') + '" id="sess-' + id + '" onclick="selectSession(\'' + id + '\')" aria-current="' + (id === currentSession ? 'true' : 'false') + '">';
     html += '<div class="sid">#' + id.slice(-12) + '</div>';
-    html += '<div class="preview">' + (s.preview || '新会话') + '</div>';
-    html += '</div>';
+    html += '<div class="preview">' + escapeHtml(s.preview || '新会话') + '</div>';
+    html += '</button>';
   }
   list.innerHTML = html || '<div style="color:#888;padding:12px;font-size:13px">无会话</div>';
 }
@@ -119,7 +137,7 @@ function renderMessages() {
   var container = document.getElementById('messages');
   var s = sessions[currentSession];
   if (!s || !s.messages.length) {
-    container.innerHTML = '<div style="color:#aaa;text-align:center;padding-top:80px">输入消息开始对话</div>';
+    container.innerHTML = '<div class="empty-state"><strong>会话已就绪</strong><p>输入消息，开始咨询。</p></div>';
     return;
   }
   var html = '';
@@ -131,9 +149,9 @@ function renderMessages() {
     html += '<div><div class="bubble">' + escapeHtml(m.content) + '</div>';
     if (Object.keys(meta).length) {
       html += '<div class="meta">';
-      if (meta.intent) html += '<span class="tag-intent">' + meta.intent + '</span>';
-      if (meta.sentiment) html += '<span class="tag-sentiment">' + meta.sentiment + '</span>';
-      if (meta.agent) html += '<span class="tag-agent">' + meta.agent + '</span>';
+      if (meta.intent) html += '<span class="tag-intent">' + escapeHtml(meta.intent) + '</span>';
+      if (meta.sentiment) html += '<span class="tag-sentiment">' + escapeHtml(meta.sentiment) + '</span>';
+      if (meta.agent) html += '<span class="tag-agent">' + escapeHtml(meta.agent) + '</span>';
       if (meta.status === 'resolved') html += '<span class="tag-resolved">已解决</span>';
       if (meta.status === 'handoff') html += '<span class="tag-handoff">已转人工</span>';
       html += '</div>';
@@ -151,26 +169,29 @@ function escapeHtml(text) {
 }
 
 async function sendMsg() {
+  if (sendingMessage) return;
   var input = document.getElementById('msgInput');
   var msg = input.value.trim();
   if (!msg) return;
   if (!currentSession) {
-    showError('请先点击 [+ 新建会话] 创建会话');
+    showError('请先创建会话');
     return;
   }
+  var sessionId = currentSession;
+  sendingMessage = true;
   input.value = '';
   var btn = document.getElementById('sendBtn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span>';
 
-  sessions[currentSession].messages.push({ role: 'user', content: msg });
-  sessions[currentSession].preview = msg.slice(0, 30);
+  sessions[sessionId].messages.push({ role: 'user', content: msg });
+  sessions[sessionId].preview = msg.slice(0, 30);
   renderSessions();
   renderMessages();
 
   // 占位气泡，随 SSE 事件实时更新
   var agentMsg = { role: 'agent', content: '正在分析...', meta: {} };
-  sessions[currentSession].messages.push(agentMsg);
+  sessions[sessionId].messages.push(agentMsg);
   renderMessages();
 
   var done = false;
@@ -186,7 +207,7 @@ async function sendMsg() {
     human_handoff: '转接人工客服...'
   };
 
-  var es = new EventSource('/chat/' + currentSession + '/stream?message=' + encodeURIComponent(msg));
+  var es = new EventSource('/chat/' + sessionId + '/stream?message=' + encodeURIComponent(msg));
 
   es.addEventListener('agent_update', function(e) {
     if (done) return;
@@ -199,7 +220,7 @@ async function sendMsg() {
     } else {
       agentMsg.content = progressLabel[node] || '处理中...';
     }
-    renderMessages();
+    if (currentSession === sessionId) renderMessages();
   });
 
   es.addEventListener('done', function(e) {
@@ -214,11 +235,12 @@ async function sendMsg() {
     if (data.agent_name) agentMsg.meta.agent = data.agent_name;
     if (data.conversation_status === 'resolved') agentMsg.meta.status = 'resolved';
     if (data.conversation_status === 'handoff') agentMsg.meta.status = 'handoff';
-    sessions[currentSession].preview = (data.reply || '').slice(0, 30);
+    sessions[sessionId].preview = (data.reply || '').slice(0, 30);
     renderSessions();
-    renderMessages();
+    if (currentSession === sessionId) renderMessages();
     btn.disabled = false;
     btn.innerHTML = '发送';
+    sendingMessage = false;
   });
 
   es.addEventListener('error', function(e) {
@@ -227,9 +249,10 @@ async function sendMsg() {
     done = true;
     es.close();
     agentMsg.content = '连接中断，请重试';
-    renderMessages();
+    if (currentSession === sessionId) renderMessages();
     btn.disabled = false;
     btn.innerHTML = '发送';
+    sendingMessage = false;
   });
 }
 </script>

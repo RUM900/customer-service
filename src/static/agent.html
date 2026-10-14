@@ -85,35 +85,41 @@ body { font: 14px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 #msg.error { background: #ffebee; color: #c62828; }
 #msg.success { background: #e8f5e9; color: #2e7d32; }
 </style>
+<link rel="stylesheet" href="/static/ui.css">
 </head>
-<body>
+<body class="agent-page">
+<div id="msg" role="status" aria-live="polite"></div>
 
 <div id="loginView">
   <div class="login-card">
     <h2>客服坐席工作台</h2>
     <p>请使用坐席账号登录（默认 agent / agent123）</p>
-    <label>用户名</label>
-    <input type="text" id="loginUsername" placeholder="agent">
-    <label>密码</label>
-    <input type="password" id="loginPassword" placeholder="agent123" onkeydown="if(event.key==='Enter')doLogin()">
+    <label for="loginUsername">用户名</label>
+    <input type="text" id="loginUsername" placeholder="agent" autocomplete="username">
+    <label for="loginPassword">密码</label>
+    <input type="password" id="loginPassword" placeholder="agent123" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
     <button class="btn btn-primary" onclick="doLogin()">登 录</button>
   </div>
 </div>
 
 <div id="appView">
   <div class="topbar">
-    <h1>💬 客服坐席工作台</h1>
+    <h1>客服坐席工作台</h1>
     <div class="user"><span id="userName"></span><button onclick="logout()">退出</button></div>
   </div>
-  <div id="msg"></div>
-  <div class="workspace">
+  <div class="mobile-view-tabs" aria-label="工作区视图">
+    <button type="button" class="active" data-view="queue" aria-pressed="true" onclick="setMobileView('queue')">会话队列</button>
+    <button type="button" data-view="chat" aria-pressed="false" onclick="setMobileView('chat')">对话</button>
+    <button type="button" data-view="copilot" aria-pressed="false" onclick="setMobileView('copilot')">AI 建议</button>
+  </div>
+  <div class="workspace" id="workspace" data-view="queue">
     <!-- 左栏：会话队列 -->
     <div class="queue">
       <div class="queue-header"><h3>待处理会话 <span id="queueBadge" style="color:#e94560"></span></h3></div>
       <div class="queue-filter">
-        <button class="active" data-status="" onclick="setFilter(this)">全部</button>
-        <button data-status="handoff" onclick="setFilter(this)">转人工</button>
-        <button data-status="awaiting_review" onclick="setFilter(this)">待审核</button>
+        <button class="active" data-status="" aria-pressed="true" onclick="setFilter(this)">全部</button>
+        <button data-status="handoff" aria-pressed="false" onclick="setFilter(this)">转人工</button>
+        <button data-status="awaiting_review" aria-pressed="false" onclick="setFilter(this)">待审核</button>
       </div>
       <div class="queue-list" id="queueList"><div class="waiting" style="padding:30px 16px;color:#aaa">加载中...</div></div>
     </div>
@@ -126,23 +132,24 @@ body { font: 14px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       </div>
       <div class="msg-list" id="msgList"><div class="waiting" style="padding:40px;text-align:center;color:#aaa">← 从左侧选择会话</div></div>
       <div class="chat-input">
-        <textarea id="replyInput" placeholder="输入回复内容，或点击右侧【采纳建议】..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendReply();}"></textarea>
+        <label class="sr-only" for="replyInput">回复内容</label>
+        <textarea id="replyInput" placeholder="输入回复内容，或采纳 AI 建议..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendReply();}"></textarea>
         <div class="actions">
           <label style="font-size:12px;color:#666;align-self:center"><input type="checkbox" id="markResolved"> 回复后标记已解决</label>
-          <button class="btn btn-ghost" onclick="adoptSuggestion()">📝 采纳建议</button>
-          <button class="btn btn-primary" onclick="sendReply()">发送回复</button>
+          <button class="btn btn-ghost" onclick="adoptSuggestion()">采纳建议</button>
+          <button class="btn btn-primary" id="replyBtn" onclick="sendReply()">发送回复</button>
         </div>
       </div>
     </div>
 
     <!-- 右栏：Copilot -->
     <div class="copilot">
-      <div class="copilot-header"><h3>🤖 AI 副驾驶</h3></div>
+      <div class="copilot-header"><h3>AI 建议</h3></div>
       <div class="copilot-body" id="copilotBody">
         <div class="waiting">打开会话后自动生成建议<br>或在输入框输入草稿后点击<重新生成></div>
       </div>
       <div class="copilot-footer">
-        <button class="btn btn-secondary" style="width:100%" onclick="regenerateCopilot()">🔄 重新生成建议</button>
+        <button class="btn btn-secondary" style="width:100%" onclick="regenerateCopilot()">重新生成建议</button>
       </div>
     </div>
   </div>
@@ -153,17 +160,30 @@ var TOKEN_KEY = 'cs_agent_token';
 var currentSession = null;
 var currentFilter = '';
 var eventSource = null;
+var sendingReply = false;
+var draftBySession = {};
+var copilotRequestId = 0;
+var openConversationId = 0;
+function setMobileView(view) {
+  document.getElementById('workspace').dataset.view = view;
+  document.querySelectorAll('.mobile-view-tabs button').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.view === view);
+    btn.setAttribute('aria-pressed', btn.dataset.view === view ? 'true' : 'false');
+  });
+}
 var statusLabels = {
-  active: '🟢 进行中', resolved: '✅ 已解决', awaiting_review: '🛑 待审核',
-  handoff: '🤝 待人工', closed: '🔒 已关闭', escalated: '⬆️ 已升级', error: '⚠️ 异常'
+  active: '进行中', resolved: '已解决', awaiting_review: '待审核',
+  handoff: '待人工', closed: '已关闭', escalated: '已升级', error: '异常'
 };
 
 function token() { return localStorage.getItem(TOKEN_KEY) || ''; }
 function authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token() }; }
+var msgTimer = null;
 function showMsg(text, isError) {
   var el = document.getElementById('msg');
   el.textContent = text; el.className = isError ? 'error' : 'success'; el.style.display = 'block';
-  setTimeout(function() { el.style.display = 'none'; }, 3500);
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(function() { el.style.display = 'none'; }, 3500);
 }
 function escapeHtml(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -208,10 +228,10 @@ async function loadQueue() {
     var html = '';
     if (!data.conversations.length) html = '<div class="waiting" style="padding:30px 16px;color:#aaa">暂无待处理会话</div>';
     data.conversations.forEach(function(c) {
-      html += '<div class="queue-item' + (currentSession === c.session_id ? ' active' : '') + '" onclick="openConversation(\'' + c.session_id + '\')">' +
+      html += '<button type="button" class="queue-item' + (currentSession === c.session_id ? ' active' : '') + '" onclick="openConversation(\'' + c.session_id + '\')" aria-current="' + (currentSession === c.session_id ? 'true' : 'false') + '">' +
         '<div class="q-status">' + (statusLabels[c.status] || c.status) + '</div>' +
         '<div class="q-msg">' + escapeHtml(c.last_message || '（无消息）') + '</div>' +
-        '<div class="q-time">' + escapeHtml((c.updated_at || '').slice(11, 19)) + '</div></div>';
+        '<div class="q-time">' + escapeHtml((c.updated_at || '').slice(11, 19)) + '</div></button>';
     });
     document.getElementById('queueList').innerHTML = html;
   } catch(e) { showMsg('加载会话队列失败: ' + e.message, true); }
@@ -219,16 +239,20 @@ async function loadQueue() {
 
 function setFilter(btn) {
   currentFilter = btn.dataset.status;
-  document.querySelectorAll('.queue-filter button').forEach(function(b){ b.classList.toggle('active', b === btn); });
+  document.querySelectorAll('.queue-filter button').forEach(function(b){ b.classList.toggle('active', b === btn); b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'); });
   loadQueue();
 }
 
 // ============ 会话详情 + SSE ============
 async function openConversation(sessionId) {
+  var requestId = ++openConversationId;
+  if (currentSession) draftBySession[currentSession] = document.getElementById('replyInput').value;
   currentSession = sessionId;
+  setMobileView('chat');
   loadQueue(); // 刷新 active 状态
   try {
     var data = await api('/agent/conversations/' + sessionId);
+    if (requestId !== openConversationId) return;
     document.getElementById('chatTitle').textContent = '会话 ' + data.session_id.slice(0, 12) + '…';
     document.getElementById('chatStatus').textContent = statusLabels[data.status] || data.status;
     var p = data.customer_profile || {};
@@ -239,12 +263,12 @@ async function openConversation(sessionId) {
       (p.total_orders ? '订单: ' + p.total_orders + '单' : '') +
       (p.tags && p.tags.length ? ' | 标签: ' + p.tags.join(',') : '');
     renderMessages(data.messages || []);
-    document.getElementById('replyInput').value = '';
+    document.getElementById('replyInput').value = draftBySession[sessionId] || '';
     // 订阅 SSE
     startSSE(sessionId);
     // 首次自动生成 Copilot 建议
     regenerateCopilot();
-  } catch(e) { showMsg('打开会话失败: ' + e.message, true); }
+  } catch(e) { if (requestId === openConversationId) showMsg('打开会话失败: ' + e.message, true); }
 }
 
 function renderMessages(messages) {
@@ -252,8 +276,8 @@ function renderMessages(messages) {
   messages.forEach(function(m) {
     var role = m.role || 'assistant';
     var whom = role === 'user' ? 'user' : (m.agent_name === 'human' ? 'human' : 'assistant');
-    var meta = role === 'user' ? '客户' : (m.agent_name === 'human' ? '🤝 人工坐席' : '🤖 ' + (m.agent_name || 'bot'));
-    html += '<div class="msg ' + whom + '"><div><div class="bubble">' + escapeHtml(m.content) + '</div><div class="meta">' + meta + ' · ' + escapeHtml((m.timestamp||'').slice(11,19)) + '</div></div></div>';
+    var meta = role === 'user' ? '客户' : (m.agent_name === 'human' ? '人工坐席' : (m.agent_name || 'AI 助手'));
+    html += '<div class="msg ' + whom + '"><div><div class="bubble">' + escapeHtml(m.content) + '</div><div class="meta">' + escapeHtml(meta) + ' · ' + escapeHtml((m.timestamp||'').slice(11,19)) + '</div></div></div>';
   });
   document.getElementById('msgList').innerHTML = html || '<div class="waiting" style="padding:40px;text-align:center;color:#aaa">暂无消息</div>';
   document.getElementById('msgList').scrollTop = document.getElementById('msgList').scrollHeight;
@@ -281,31 +305,43 @@ function appendLiveMessage(kind, data) {
 
 // ============ 坐席回复 ============
 async function sendReply() {
+  if (sendingReply) return;
   if (!currentSession) { showMsg('请先选择会话', true); return; }
-  var content = document.getElementById('replyInput').value.trim();
+  var sessionId = currentSession;
+  var input = document.getElementById('replyInput');
+  var content = input.value.trim();
   if (!content) { showMsg('请输入回复内容', true); return; }
+  var adoption = { logId: window._copilotLogId, adopted: window._copilotAdopted, reply: window._copilotReply };
+  sendingReply = true;
+  var btn = document.getElementById('replyBtn');
+  btn.disabled = true;
+  btn.textContent = '发送中...';
   try {
-    await api('/agent/conversations/' + currentSession + '/reply', {
+    await api('/agent/conversations/' + sessionId + '/reply', {
       method: 'POST',
       body: JSON.stringify({ content: content, mark_resolved: document.getElementById('markResolved').checked })
     });
     // Copilot 采纳打点（若采纳过建议）
-    await reportAdoption(content);
-    document.getElementById('replyInput').value = '';
+    await reportAdoption(content, adoption);
+    draftBySession[sessionId] = '';
+    if (currentSession === sessionId && input.value.trim() === content) input.value = '';
     showMsg('回复已发送');
-    api('/agent/conversations/' + currentSession).then(function(d) { renderMessages(d.messages || []); }).catch(function(){});
+    api('/agent/conversations/' + sessionId).then(function(d) { if (currentSession === sessionId) renderMessages(d.messages || []); }).catch(function(){});
     setTimeout(loadQueue, 300);
-  } catch(e) { showMsg('发送失败: ' + e.message, true); }
+  } catch(e) { showMsg('发送失败，草稿已保留: ' + e.message, true); }
+  finally { sendingReply = false; btn.disabled = false; btn.textContent = '发送回复'; }
 }
 
 // ============ Copilot ============
 async function regenerateCopilot() {
   if (!currentSession) return;
+  var sessionId = currentSession;
+  var requestId = ++copilotRequestId;
   var body = document.getElementById('copilotBody');
   body.innerHTML = '<div class="waiting">正在生成建议...</div>';
   var customerMessage = '（查看上方完整会话）';
   try {
-    var history = await api('/agent/conversations/' + currentSession);
+    var history = await api('/agent/conversations/' + sessionId);
     var msgs = history.messages || [];
     for (var i = msgs.length - 1; i >= 0; i--) {
       if (msgs[i].role === 'user') { customerMessage = msgs[i].content; break; }
@@ -313,12 +349,13 @@ async function regenerateCopilot() {
   } catch(e) {}
   var draft = document.getElementById('replyInput').value.trim();
   try {
-    var data = await api('/agent/conversations/' + currentSession + '/copilot', {
+    var data = await api('/agent/conversations/' + sessionId + '/copilot', {
       method: 'POST',
-      body: JSON.stringify({ session_id: currentSession, customer_message: customerMessage, agent_draft: draft })
+      body: JSON.stringify({ session_id: sessionId, customer_message: customerMessage, agent_draft: draft })
     });
+    if (requestId !== copilotRequestId || currentSession !== sessionId) return;
     var tools = (data.suggested_tools || []).map(function(t){
-      return '<span class="tag" onclick="fillToolQuery(\'' + t + '\')">🔧 ' + t + '</span>';
+      return '<span class="tag" onclick="fillToolQuery(\'' + t + '\')">' + escapeHtml(t) + '</span>';
     }).join('');
     window._copilotSuggestions = (data.suggestions && data.suggestions.length) ? data.suggestions : [data.suggested_reply || ''];
     window._copilotIdx = 0;
@@ -328,7 +365,7 @@ async function regenerateCopilot() {
     // 渲染风险提示卡（合规护栏）
     var riskHtml = '';
     if (data.risk_flags && data.risk_flags.length) {
-      riskHtml = '<div class="cp-section"><h4>⚠️ 风险提示</h4>';
+      riskHtml = '<div class="cp-section"><h4>风险提示</h4>';
       data.risk_flags.forEach(function(rf) {
         var lv = rf.level || 'medium';
         riskHtml += '<div class="cp-risk cp-risk-' + lv + '"><b>' + escapeHtml(rf.type) + '</b><br>' + escapeHtml(rf.message) + '</div>';
@@ -336,22 +373,22 @@ async function regenerateCopilot() {
       riskHtml += '</div>';
     }
     // 多候选建议渲染（可切换）
-    var suggHtml = '<div class="cp-section"><h4>📝 候选话术（' + window._copilotSuggestions.length + ' 种风格，←/→ 切换）</h4>' +
+    var suggHtml = '<div class="cp-section"><h4>候选话术（' + window._copilotSuggestions.length + ' 种风格）</h4>' +
       '<div class="cp-nav">' +
       (window._copilotSuggestions.length > 1 ? '<button class="btn btn-ghost btn-sm" onclick="prevSuggestion()">← 上一条</button>' : '') +
       '<span class="cp-count">' + (window._copilotIdx + 1) + '/' + window._copilotSuggestions.length + '</span>' +
       (window._copilotSuggestions.length > 1 ? '<button class="btn btn-ghost btn-sm" onclick="nextSuggestion()">下一条 →</button>' : '') +
       '</div>' +
       '<div class="cp-suggest" id="cpSuggestBox">' + escapeHtml(window._copilotReply) + '</div>' +
-      '<button class="btn btn-secondary btn-sm" style="width:100%;margin-top:6px" onclick="adoptSuggestion()">📥 采纳本条（Ctrl/⌘+Enter）</button>' +
+      '<button class="btn btn-secondary btn-sm" style="width:100%;margin-top:6px" onclick="adoptSuggestion()">采纳本条（Ctrl/⌘+Enter）</button>' +
       '</div>';
     // 渲染知识库引用（话术依据，防幻觉）
     var knowledgeRefHtml = '';
     if (data.knowledge_refs && data.knowledge_refs.length) {
-      knowledgeRefHtml = '<div class="cp-section"><h4>📚 政策依据</h4>';
+      knowledgeRefHtml = '<div class="cp-section"><h4>政策依据</h4>';
       data.knowledge_refs.forEach(function(ref) {
         knowledgeRefHtml += '<div class="cp-ref" title="faq_id: ' + escapeHtml(ref.faq_id || '') + '">' +
-          '📄 ' + escapeHtml(ref.question) +
+          escapeHtml(ref.question) +
           (ref.category ? ' <span class="tag">' + escapeHtml(ref.category) + '</span>' : '') +
           (ref.score ? ' <span style="color:#888;font-size:11px">' + Math.round(ref.score * 100) + '%</span>' : '') +
           '</div>';
@@ -362,9 +399,9 @@ async function regenerateCopilot() {
       suggHtml +
       riskHtml +
       knowledgeRefHtml +
-      (data.context_summary ? '<div class="cp-section"><h4>🗂️ 上下文摘要</h4><div class="cp-summary">' + escapeHtml(data.context_summary) + '</div></div>' : '') +
-      (tools ? '<div class="cp-section"><h4>🔧 建议操作</h4><div class="cp-tools">' + tools + '</div></div>' : '');
-  } catch(e) { body.innerHTML = '<div class="waiting">建议生成失败: ' + escapeHtml(e.message) + '</div>'; }
+      (data.context_summary ? '<div class="cp-section"><h4>上下文摘要</h4><div class="cp-summary">' + escapeHtml(data.context_summary) + '</div></div>' : '') +
+      (tools ? '<div class="cp-section"><h4>建议操作</h4><div class="cp-tools">' + tools + '</div></div>' : '');
+  } catch(e) { if (requestId === copilotRequestId && currentSession === sessionId) body.innerHTML = '<div class="waiting">建议生成失败: ' + escapeHtml(e.message) + '</div>'; }
 }
 
 // 多候选切换
@@ -412,17 +449,17 @@ function bindCopilotHotkeys() {
 bindCopilotHotkeys();
 
 // 采纳打点上报（发送回复时调用）
-async function reportAdoption(content) {
-  if (!window._copilotLogId) return;
-  var adopted = window._copilotAdopted;
+async function reportAdoption(content, state) {
+  if (!state.logId) return;
+  var adopted = state.adopted;
   if (adopted === 0) return;  // 未采纳过建议，不打点
   // 判断是否被修改：发送内容与建议原文不同 → 修改后采纳
   var finalAdopt = adopted;
-  if (content !== window._copilotReply) finalAdopt = 2;
+  if (content !== state.reply) finalAdopt = 2;
   try {
-    await api('/admin/knowledge/copilot/' + window._copilotLogId + '/adopt', {
+    await api('/admin/knowledge/copilot/' + state.logId + '/adopt', {
       method: 'POST',
-      body: JSON.stringify({ adopted: finalAdopt, edited_delta: window._copilotReply })
+      body: JSON.stringify({ adopted: finalAdopt, edited_delta: state.reply })
     });
     console.log('Copilot 采纳已记录:', finalAdopt);
   } catch(e) { console.warn('采纳打点失败:', e.message); }

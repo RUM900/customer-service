@@ -59,18 +59,20 @@ textarea { min-height: 70px; resize: vertical; }
 #msg.error { background: #ffebee; color: #c62828; }
 #msg.success { background: #e8f5e9; color: #2e7d32; }
 </style>
+<link rel="stylesheet" href="/static/ui.css">
 </head>
-<body>
+<body class="admin-page">
+<div id="msg" role="status" aria-live="polite"></div>
 
 <!-- 登录视图 -->
 <div id="loginView">
   <div class="login-card">
     <h2>客服系统管理后台</h2>
     <p>请使用管理员账号登录</p>
-    <label>用户名</label>
-    <input type="text" id="loginUsername" placeholder="admin">
-    <label>密码</label>
-    <input type="password" id="loginPassword" placeholder="admin123" onkeydown="if(event.key==='Enter')doLogin()">
+    <label for="loginUsername">用户名</label>
+    <input type="text" id="loginUsername" placeholder="admin" autocomplete="username">
+    <label for="loginPassword">密码</label>
+    <input type="password" id="loginPassword" placeholder="admin123" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
     <button class="btn btn-primary" onclick="doLogin()">登 录</button>
   </div>
 </div>
@@ -83,12 +85,12 @@ textarea { min-height: 70px; resize: vertical; }
       <p id="loginInfo"></p>
     </div>
     <div class="nav">
-      <button class="nav-item active" data-tab="models" onclick="switchTab('models')">🤖 模型配置</button>
-      <button class="nav-item" data-tab="faqs" onclick="switchTab('faqs')">📚 FAQ 管理</button>
-      <button class="nav-item" data-tab="docs" onclick="switchTab('docs')">📄 知识库文档</button>
-      <button class="nav-item" data-tab="reviews" onclick="switchTab('reviews')">🛡️ 人工审核队列</button>
-      <button class="nav-item" data-tab="gaps" onclick="switchTab('gaps')">📊 知识盲区</button>
-      <button class="nav-item" data-tab="copilot" onclick="switchTab('copilot')">🤝 坐席 Copilot</button>
+      <button class="nav-item active" data-tab="models" onclick="switchTab('models')">模型配置</button>
+      <button class="nav-item" data-tab="faqs" onclick="switchTab('faqs')">FAQ 管理</button>
+      <button class="nav-item" data-tab="docs" onclick="switchTab('docs')">知识库文档</button>
+      <button class="nav-item" data-tab="reviews" onclick="switchTab('reviews')">人工审核</button>
+      <button class="nav-item" data-tab="gaps" onclick="switchTab('gaps')">知识盲区</button>
+      <button class="nav-item" data-tab="copilot" onclick="switchTab('copilot')">坐席 Copilot</button>
     </div>
     <div class="sidebar-footer">
       <span id="userName"></span>
@@ -97,8 +99,6 @@ textarea { min-height: 70px; resize: vertical; }
   </div>
 
   <div class="main">
-    <div id="msg"></div>
-
     <!-- 模型配置 -->
     <div class="tab-page" id="tab-models">
       <div class="page-header"><h3>Agent 模型配置</h3><span class="desc">修改后立即生效（自动重建 Agent 实例）</span></div>
@@ -116,8 +116,8 @@ textarea { min-height: 70px; resize: vertical; }
       <div class="card">
         <h4 id="faqFormTitle">新增 FAQ</h4>
         <div class="form-row">
-          <div><label>问题</label><input type="text" id="faqQuestion" placeholder="常见问题标题"></div>
-          <div><label>分类</label>
+          <div><label for="faqQuestion">问题</label><input type="text" id="faqQuestion" placeholder="常见问题标题"></div>
+          <div><label for="faqCategory">分类</label>
             <select id="faqCategory">
               <option value="general">通用 general</option>
               <option value="order">订单 order</option>
@@ -127,10 +127,10 @@ textarea { min-height: 70px; resize: vertical; }
               <option value="account">账户 account</option>
             </select>
           </div>
-          <div style="flex:0 0 120px"><label>优先级</label><input type="text" id="faqPriority" placeholder="10"></div>
+          <div style="flex:0 0 120px"><label for="faqPriority">优先级</label><input type="number" id="faqPriority" placeholder="10"></div>
         </div>
         <div class="form-row">
-          <div><label>答案</label><textarea id="faqAnswer" placeholder="标准答案"></textarea></div>
+          <div><label for="faqAnswer">答案</label><textarea id="faqAnswer" placeholder="标准答案"></textarea></div>
         </div>
         <button class="btn btn-primary" onclick="saveFaq()">保存 FAQ</button>
         <button class="btn btn-ghost" id="faqCancel" style="display:none" onclick="cancelFaqEdit()">取消编辑</button>
@@ -149,7 +149,7 @@ textarea { min-height: 70px; resize: vertical; }
       <div class="card">
         <h4>上传文档</h4>
         <div class="form-row">
-          <div style="flex:0 0 260px"><label>选择文件</label><input type="file" id="docFile"></div>
+          <div style="flex:0 0 260px"><label for="docFile">选择文件</label><input type="file" id="docFile"></div>
         </div>
         <button class="btn btn-primary" onclick="uploadDoc()">上传并索引</button>
       </div>
@@ -166,7 +166,7 @@ textarea { min-height: 70px; resize: vertical; }
       <div class="page-header"><h3>人工审核队列</h3><span class="desc">Supervisor 高风险决策 + 客户转人工申请</span></div>
       <div class="card">
         <table>
-          <thead><tr><th>类型</th><th>会话</th><th>内容</th><th>审核项</th><th style="width:80px">详情</th><th style="width:180px">操作</th></tr></thead>
+          <thead><tr><th>类型</th><th>会话</th><th>内容</th><th>审核项</th><th style="width:140px">操作</th></tr></thead>
           <tbody id="reviewsBody"></tbody>
         </table>
       </div>
@@ -177,7 +177,7 @@ textarea { min-height: 70px; resize: vertical; }
       <div class="page-header"><h3>知识盲区建议清单</h3><span class="desc">FAQ 未命中 / 转人工的高频问题 → 建议补充为 FAQ</span></div>
       <div class="card">
         <div class="form-row">
-          <div style="flex:0 0 auto"><label>最少出现次数</label><input type="number" id="gapMinCount" value="2" style="width:80px"></div>
+          <div style="flex:0 0 auto"><label for="gapMinCount">最少出现次数</label><input type="number" id="gapMinCount" value="2" min="1" style="width:80px"></div>
           <div style="align-self:end"><button class="btn btn-secondary" onclick="loadGaps()">重新分析</button></div>
         </div>
         <table>
@@ -192,13 +192,13 @@ textarea { min-height: 70px; resize: vertical; }
       <div class="page-header"><h3>坐席 Copilot</h3><span class="desc">人工聊天时输入客户诉求，AI 实时推荐话术</span></div>
       <div class="card">
         <div class="form-row">
-          <div><label>会话 ID</label><input type="text" id="coSession" placeholder="sess_xxx"></div>
+          <div><label for="coSession">会话 ID</label><input type="text" id="coSession" placeholder="sess_xxx"></div>
         </div>
         <div class="form-row">
-          <div><label>客户最新消息</label><textarea id="coMessage" placeholder="客户说..."></textarea></div>
+          <div><label for="coMessage">客户最新消息</label><textarea id="coMessage" placeholder="客户说..."></textarea></div>
         </div>
         <div class="form-row">
-          <div><label>坐席草稿（可选）</label><textarea id="coDraft" placeholder="自己写了一半的内容..."></textarea></div>
+          <div><label for="coDraft">坐席草稿（可选）</label><textarea id="coDraft" placeholder="自己写了一半的内容..."></textarea></div>
         </div>
         <button class="btn btn-primary" onclick="runCopilot()">生成建议话术</button>
         <div id="coResult" style="margin-top:14px"></div>
@@ -207,18 +207,35 @@ textarea { min-height: 70px; resize: vertical; }
   </div>
 </div>
 
+<dialog class="review-dialog" id="reviewDialog" aria-labelledby="reviewDialogTitle">
+  <div class="review-dialog-header"><h3 id="reviewDialogTitle">审核详情</h3><button class="review-dialog-close" type="button" aria-label="关闭审核详情" onclick="closeReview()">×</button></div>
+  <div class="review-dialog-content">
+    <dl class="review-detail" id="reviewDetail"></dl>
+    <label for="reviewNote">审核备注 <span id="reviewNoteHint" style="font-weight:400;color:var(--muted)">批准时可留空，驳回时必填</span></label>
+    <textarea id="reviewNote" placeholder="填写审核依据或驳回原因"></textarea>
+    <div class="review-error" id="reviewError" role="alert"></div>
+  </div>
+  <div class="review-dialog-actions">
+    <button class="btn btn-ghost" type="button" onclick="closeReview()">取消</button>
+    <button class="btn btn-danger" id="reviewRejectBtn" type="button" onclick="submitReview('reject')">驳回</button>
+    <button class="btn btn-primary" id="reviewApproveBtn" type="button" onclick="submitReview('approve')">批准</button>
+  </div>
+</dialog>
+
 <script>
 var TOKEN_KEY = 'cs_admin_token';
 var AGENT_LABELS = { triage: '分诊 Triage', technical: '技术 Technical', billing: '账务 Billing', product: '产品 Product', complaint: '投诉 Complaint', supervisor: '主管 Supervisor' };
 
 function token() { return localStorage.getItem(TOKEN_KEY) || ''; }
 function authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token() }; }
+var msgTimer = null;
 function showMsg(text, isError) {
   var el = document.getElementById('msg');
   el.textContent = text;
   el.className = isError ? 'error' : 'success';
   el.style.display = 'block';
-  setTimeout(function() { el.style.display = 'none'; }, 4000);
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(function() { el.style.display = 'none'; }, 4000);
 }
 
 async function api(url, opts) {
@@ -271,7 +288,11 @@ function logout() {
 }
 
 function switchTab(tab) {
-  document.querySelectorAll('.nav-item').forEach(function(el) { el.classList.toggle('active', el.dataset.tab === tab); });
+  document.querySelectorAll('.nav-item').forEach(function(el) {
+    var active = el.dataset.tab === tab;
+    el.classList.toggle('active', active);
+    if (active) el.setAttribute('aria-current', 'page'); else el.removeAttribute('aria-current');
+  });
   document.querySelectorAll('.tab-page').forEach(function(el) { el.style.display = 'none'; });
   document.getElementById('tab-' + tab).style.display = 'block';
   if (tab === 'models') loadModels();
@@ -320,8 +341,8 @@ async function loadFaqs() {
     var html = '';
     if (!data.faqs.length) html = '<tr><td colspan="4" class="empty">暂无 FAQ</td></tr>';
     data.faqs.forEach(function(f) {
-      html += '<tr><td><b>' + f.question + '</b><br><span style="color:#888;font-size:12px">' + f.answer.slice(0, 80) + (f.answer.length > 80 ? '...' : '') + '</span></td>' +
-        '<td>' + f.category + '</td><td>' + f.priority + '</td>' +
+      html += '<tr><td><b>' + escapeHtml(f.question) + '</b><br><span style="color:#888;font-size:12px">' + escapeHtml(f.answer.slice(0, 80)) + (f.answer.length > 80 ? '...' : '') + '</span></td>' +
+        '<td>' + escapeHtml(f.category) + '</td><td>' + f.priority + '</td>' +
         '<td><button class="btn btn-secondary btn-sm" onclick="editFaq(\'' + f.faq_id + '\')">编辑</button> ' +
         '<button class="btn btn-danger btn-sm" onclick="deleteFaq(\'' + f.faq_id + '\')">删除</button></td></tr>';
     });
@@ -392,7 +413,7 @@ async function loadDocs() {
     var html = '';
     if (!data.documents.length) html = '<tr><td colspan="4" class="empty">暂无文档</td></tr>';
     data.documents.forEach(function(d) {
-      html += '<tr><td>' + (d.filename || 'unknown') + '</td><td>' + (d.format || '-') + '</td><td>' + d.chunks + '</td>' +
+      html += '<tr><td>' + escapeHtml(d.filename || 'unknown') + '</td><td>' + escapeHtml(d.format || '-') + '</td><td>' + d.chunks + '</td>' +
         '<td><button class="btn btn-danger btn-sm" onclick="deleteDoc(\'' + encodeURIComponent(d.filename) + '\')">删除</button></td></tr>';
     });
     document.getElementById('docsBody').innerHTML = html;
@@ -433,23 +454,23 @@ async function deleteDoc(name) {
 // 人工审核队列
 // ============================================================
 var REVIEW_LABELS = { supervisor_decision: 'Supervisor 决策', human_handoff: '转人工申请' };
+var currentReviewId = null;
+var reviewSubmitting = false;
 
 async function loadReviews() {
   try {
     var data = await api('/admin/knowledge/reviews');
     var html = '';
-    if (!data.reviews.length) html = '<tr><td colspan="6" class="empty">暂无待审核案例</td></tr>';
+    if (!data.reviews.length) html = '<tr><td colspan="5" class="empty">暂无待审核案例</td></tr>';
     data.reviews.forEach(function(r) {
-      var items = (r.review_items || []).map(function(i) { return '<span class="tag">' + i + '</span>'; }).join('');
+      var items = (r.review_items || []).map(function(i) { return '<span class="tag">' + escapeHtml(String(i)) + '</span>'; }).join('');
       var typeTag = '<span class="tag tag-' + (r.review_type === 'human_handoff' ? 'handoff' : 'supervisor') + '">' + (REVIEW_LABELS[r.review_type] || r.review_type) + '</span>';
       var ticketInfo = r.ticket_id ? '<br><span style="color:#1565c0;font-size:12px">工单: ' + r.ticket_id + '</span>' : '';
       var handoffInfo = (r.review_type === 'human_handoff' && r.handoff_summary) ? '<br><span style="color:#666;font-size:12px">摘要: ' + escapeHtml(r.handoff_summary.slice(0, 80)) + '</span>' : '';
       html += '<tr><td>' + typeTag + ticketInfo + '</td>' +
-        '<td>' + (r.session_id || r.thread_id || '-').slice(0, 20) + '</td>' +
+        '<td>' + escapeHtml((r.session_id || r.thread_id || '-').slice(0, 20)) + '</td>' +
         '<td>' + escapeHtml(r.message || '') + handoffInfo + '</td><td>' + items + '</td>' +
-        '<td><button class="btn btn-secondary btn-sm" onclick="showReviewDetail(\'' + r.thread_id + '\')">查看</button></td>' +
-        '<td style="white-space:nowrap"><button class="btn btn-secondary btn-sm" onclick="resolveReview(\'' + r.thread_id + '\',\'approve\')">批准</button> ' +
-        '<button class="btn btn-danger btn-sm" onclick="resolveReview(\'' + r.thread_id + '\',\'reject\')">驳回</button></td></tr>';
+        '<td><button class="btn btn-secondary btn-sm" onclick="showReviewDetail(\'' + r.thread_id + '\')">查看并审核</button></td></tr>';
     });
     document.getElementById('reviewsBody').innerHTML = html;
   } catch (e) { showMsg('加载审核队列失败: ' + e.message, true); }
@@ -464,28 +485,69 @@ async function showReviewDetail(threadId) {
   try {
     var r = await api('/admin/knowledge/reviews/' + threadId);
     var decision = r.decision || {};
-    var lines = [];
-    if (decision.action) lines.push('决策动作: ' + decision.action);
-    if (decision.reasoning) lines.push('决策理由: ' + decision.reasoning);
-    if (decision.final_solution) lines.push('终局方案: ' + decision.final_solution);
-    if (decision.compensation) lines.push('补偿方案: ' + decision.compensation);
-    if (r.reviewer_note) lines.push('审核备注: ' + r.reviewer_note);
-    if (r.reviewed_at) lines.push('审核时间: ' + r.reviewed_at);
-    if (r.ticket_id) lines.push('关联工单: ' + r.ticket_id);
-    var detail = lines.length ? lines.join('\n') : '（无额外详情）';
-    alert(detail);
+    currentReviewId = threadId;
+    var detail = document.getElementById('reviewDetail');
+    detail.replaceChildren();
+    function addDetail(label, value) {
+      if (value === undefined || value === null || value === '') return;
+      var dt = document.createElement('dt');
+      var dd = document.createElement('dd');
+      dt.textContent = label;
+      dd.textContent = String(value);
+      detail.append(dt, dd);
+    }
+    addDetail('类型', REVIEW_LABELS[r.review_type] || r.review_type);
+    addDetail('会话', r.session_id || r.thread_id);
+    addDetail('客户消息', r.message);
+    addDetail('审核项', (r.review_items || []).join('、'));
+    addDetail('决策动作', decision.action);
+    addDetail('决策理由', decision.reasoning);
+    addDetail('建议方案', decision.final_solution);
+    addDetail('补偿方案', decision.compensation);
+    addDetail('转人工摘要', r.handoff_summary);
+    addDetail('关联工单', r.ticket_id);
+    if (!detail.children.length) addDetail('详情', '暂无额外详情');
+    document.getElementById('reviewNote').value = '';
+    document.getElementById('reviewError').textContent = '';
+    document.getElementById('reviewDialog').showModal();
   } catch (e) { showMsg('获取详情失败: ' + e.message, true); }
 }
 
-async function resolveReview(threadId, action) {
-  var note = prompt(action === 'approve' ? '批准备注（可留空）：' : '驳回原因：');
-  if (note === null) return;
-  var url = '/admin/knowledge/reviews/' + threadId + '/' + action + '?note=' + encodeURIComponent(note);
+function closeReview() {
+  if (reviewSubmitting) return;
+  document.getElementById('reviewDialog').close();
+  currentReviewId = null;
+}
+document.getElementById('reviewDialog').addEventListener('close', function() { currentReviewId = null; });
+document.getElementById('reviewDialog').addEventListener('cancel', function(e) { if (reviewSubmitting) e.preventDefault(); });
+
+async function submitReview(action) {
+  if (!currentReviewId || reviewSubmitting) return;
+  var note = document.getElementById('reviewNote').value.trim();
+  var error = document.getElementById('reviewError');
+  if (action === 'reject' && !note) {
+    error.textContent = '请填写驳回原因。';
+    document.getElementById('reviewNote').focus();
+    return;
+  }
+  error.textContent = '';
+  reviewSubmitting = true;
+  document.getElementById('reviewApproveBtn').disabled = true;
+  document.getElementById('reviewRejectBtn').disabled = true;
+  var noteParam = action === 'reject' ? 'reason' : 'note';
+  var url = '/admin/knowledge/reviews/' + encodeURIComponent(currentReviewId) + '/' + action + '?' + noteParam + '=' + encodeURIComponent(note);
   try {
     await api(url, { method: 'POST' });
+    reviewSubmitting = false;
+    closeReview();
     showMsg(action === 'approve' ? '已批准' : '已驳回');
     loadReviews();
-  } catch (e) { showMsg('操作失败: ' + e.message, true); }
+  } catch (e) { error.textContent = '操作失败：' + e.message; }
+  finally {
+    reviewSubmitting = false;
+    document.getElementById('reviewApproveBtn').disabled = false;
+    document.getElementById('reviewRejectBtn').disabled = false;
+  }
 }
 
 // ============================================================

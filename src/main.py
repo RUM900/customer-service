@@ -13,6 +13,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 
 from src.api.routes import router
 from src.api.middleware import setup_middleware
@@ -134,6 +136,7 @@ from src.api.admin_auth_routes import router as admin_auth_router
 app.include_router(admin_auth_router)
 from src.api.agent_routes import router as agent_router
 app.include_router(agent_router)
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 
 # ============================================================
@@ -143,7 +146,6 @@ app.include_router(agent_router)
 @app.get("/", response_class=HTMLResponse)
 async def chat_ui():
     """内置 Web 聊天界面"""
-    from pathlib import Path
     html_path = Path(__file__).parent / "static" / "chat.html"
     return html_path.read_text(encoding="utf-8")
 
@@ -151,7 +153,6 @@ async def chat_ui():
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_ui():
     """内置管理后台界面"""
-    from pathlib import Path
     html_path = Path(__file__).parent / "static" / "admin.html"
     return html_path.read_text(encoding="utf-8")
 
@@ -159,7 +160,6 @@ async def admin_ui():
 @app.get("/agent", response_class=HTMLResponse)
 async def agent_ui():
     """内置坐席工作台界面"""
-    from pathlib import Path
     html_path = Path(__file__).parent / "static" / "agent.html"
     return html_path.read_text(encoding="utf-8")
 
